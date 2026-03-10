@@ -73,7 +73,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: "https://zubacademy.vercel.app/auth/callback?next=/perfil",
+        emailRedirectTo: "https://zubacademy.vercel.app/auth/confirm?next=/perfil",
       },
     });
 

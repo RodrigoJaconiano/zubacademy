@@ -9,7 +9,7 @@ export default function WhatsAppSupportButton() {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
-  const phone = "5511999999999";
+  const phone = "556231420385";
   const message = encodeURIComponent(
     "Olá! Preciso de ajuda com a plataforma Zubale Academy."
   );
