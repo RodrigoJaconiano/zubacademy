@@ -47,7 +47,7 @@ export default async function DashboardPage() {
           />
 
           <Link
-            href="/auth/login"
+            href="/login"
             className="inline-flex items-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-blue-700"
           >
             Ir para o login
@@ -71,7 +71,7 @@ export default async function DashboardPage() {
 
     supabase
       .from("profiles")
-      .select("name, phone, cep, city, state, address")
+      .select("name, phone, cep, city, state, address, number")
       .eq("id", user.id)
       .maybeSingle<ProfileData>(),
 
@@ -93,6 +93,11 @@ export default async function DashboardPage() {
   ]);
 
   if (progressError || profileError || certificateError || quizError) {
+    console.error("progressError:", progressError);
+    console.error("profileError:", profileError);
+    console.error("certificateError:", certificateError);
+    console.error("quizError:", quizError);
+
     return (
       <PageContainer>
         <Card>
@@ -136,7 +141,7 @@ export default async function DashboardPage() {
           <div>
             <SectionHeading
               eyebrow="Painel do aluno"
-              title="Bem-vindo de volta"
+              title="Boas vindas!"
               description="Acompanhe seu progresso, continue as aulas e avance para a certificação."
             />
 
@@ -151,7 +156,9 @@ export default async function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
             <div className="flex min-h-[108px] flex-col justify-between rounded-2xl border border-blue-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <p className="text-sm leading-5 text-slate-500">Curso</p>
-              <p className="mt-3 text-2xl font-bold leading-none text-slate-900">1</p>
+              <p className="mt-3 text-2xl font-bold leading-none text-slate-900">
+                1
+              </p>
             </div>
 
             <div className="flex min-h-[108px] flex-col justify-between rounded-2xl border border-blue-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -204,8 +211,8 @@ export default async function DashboardPage() {
                 </div>
 
                 <p className="mt-4 text-sm text-slate-600">
-                  Enquanto isso, algumas ações ficarão bloqueadas, como quiz
-                  final e certificação.
+                  Enquanto isso, algumas ações ficarão bloqueadas, como curso,
+                  quiz final e certificação.
                 </p>
               </div>
             </div>
@@ -266,53 +273,62 @@ export default async function DashboardPage() {
               <ProgressBar value={dashboardState.progressPercentage} />
             </div>
 
-{dashboardState.certificateUnlocked ? (
-  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-sm font-semibold text-emerald-700">
-          Parabéns, você finalizou o curso.
-        </p>
-        <p className="mt-1 text-sm text-slate-700">
-          Seu certificado já está disponível para visualização e download.
-        </p>
-      </div>
+            {dashboardState.certificateUnlocked ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-700">
+                      Parabéns, você finalizou o curso.
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      Seu certificado já está disponível para visualização e
+                      download.
+                    </p>
+                  </div>
 
-      <Link
-        href="/certificado"
-        className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md"
-      >
-        Ver certificado
-      </Link>
-    </div>
-  </div>
-) : (
-  <div className="flex flex-col gap-3 sm:flex-row">
-    <Link
-      href="/curso"
-      className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
-    >
-      {dashboardState.primaryCourseActionLabel}
-    </Link>
+                  <Link
+                    href="/certificado"
+                    className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md"
+                  >
+                    Ver certificado
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href={profileIncomplete ? "/perfil" : "/curso"}
+                  className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold shadow-sm transition duration-200 ${
+                    profileIncomplete
+                      ? "bg-amber-500 text-white hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-md"
+                      : "bg-blue-600 !text-white hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
+                  }`}
+                >
+                  {profileIncomplete
+                    ? "Complete o cadastro para iniciar o curso"
+                    : dashboardState.primaryCourseActionLabel}
+                </Link>
 
-    <Link
-      href={profileIncomplete ? "/perfil" : "/quiz"}
-      className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-200 ${
-        dashboardState.quizUnlocked && !quizCompleted
-          ? "border border-blue-200 bg-blue-50 text-blue-700 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white"
-          : "border border-slate-200 bg-slate-100 text-slate-400"
-      }`}
-    >
-      {profileIncomplete
-        ? "Complete o cadastro para liberar o quiz"
-        : quizCompleted
-        ? "Quiz concluído"
-        : dashboardState.quizUnlocked
-        ? "Ir para o quiz final"
-        : "Quiz bloqueado"}
-    </Link>
-  </div>
-)}
+                <Link
+                  href={profileIncomplete ? "/perfil" : "/quiz"}
+                  className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-200 ${
+                    dashboardState.quizUnlocked && !quizCompleted
+                      ? "border border-blue-200 bg-blue-50 text-blue-700 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white"
+                      : profileIncomplete
+                      ? "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      : "border border-slate-200 bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  {profileIncomplete
+                    ? "Complete o cadastro para liberar o quiz"
+                    : quizCompleted
+                    ? "Quiz concluído"
+                    : dashboardState.quizUnlocked
+                    ? "Ir para o quiz final"
+                    : "Quiz bloqueado"}
+                </Link>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -363,10 +379,16 @@ export default async function DashboardPage() {
 
             <div className="mt-4 grid gap-3">
               <Link
-                href="/curso"
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                href={profileIncomplete ? "/perfil" : "/curso"}
+                className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                  profileIncomplete
+                    ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                }`}
               >
-                Abrir curso
+                {profileIncomplete
+                  ? "Complete o cadastro para iniciar o curso"
+                  : "Abrir curso"}
               </Link>
 
               <Link
