@@ -48,7 +48,7 @@ export default async function DashboardPage() {
 
           <Link
             href="/auth/login"
-            className="inline-flex items-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            className="inline-flex items-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-blue-700"
           >
             Ir para o login
           </Link>
