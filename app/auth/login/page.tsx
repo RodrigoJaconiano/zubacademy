@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 import PageContainer from "@/components/ui/page-container";
@@ -11,11 +12,58 @@ import TextMessage from "@/components/ui/text-message";
 
 export default function LoginPage() {
   const supabase = createClient();
+  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"default" | "success" | "error">("default");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error("Erro ao verificar sessão:", userError);
+        setCheckingSession(false);
+        return;
+      }
+
+      if (!user) {
+        setCheckingSession(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("name, phone, cep, city, state, address, number")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Erro ao buscar perfil no login:", profileError);
+        setCheckingSession(false);
+        return;
+      }
+
+      const profileIncomplete =
+        !profile?.name ||
+        !profile?.phone ||
+        !profile?.cep ||
+        !profile?.city ||
+        !profile?.state ||
+        !profile?.address ||
+        !profile?.number;
+
+      router.replace(profileIncomplete ? "/perfil" : "/dashboard");
+    }
+
+    checkSession();
+  }, [router, supabase]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +73,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: "https://zubacademy.vercel.app/auth/callback?next=/dashboard",
+        emailRedirectTo: "https://zubacademy.vercel.app/auth/callback?next=/perfil",
       },
     });
 
@@ -40,6 +88,18 @@ export default function LoginPage() {
     setStatus("success");
     setMessage("Verifique seu e-mail para entrar.");
     setLoading(false);
+  }
+
+  if (checkingSession) {
+    return (
+      <PageContainer className="flex min-h-screen items-center justify-center py-16">
+        <div className="w-full max-w-md">
+          <Card className="rounded-[28px] p-8">
+            <p className="text-sm text-slate-600">Verificando acesso...</p>
+          </Card>
+        </div>
+      </PageContainer>
+    );
   }
 
   return (
