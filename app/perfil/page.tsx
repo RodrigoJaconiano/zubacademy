@@ -20,7 +20,7 @@ export default async function PerfilPage() {
           eyebrow="Perfil"
           title="Usuário não autenticado"
           description="Faça login para editar seu perfil."
-          actionHref="/auth/login"
+          actionHref="/login"
           actionLabel="Ir para login"
         />
       </PageContainer>
