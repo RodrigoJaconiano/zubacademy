@@ -18,6 +18,7 @@ export default function WhatsAppSupportButton() {
     const alreadyClosed = sessionStorage.getItem(SESSION_KEY);
 
     if (alreadyClosed === "true") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReady(true);
       return;
     }
