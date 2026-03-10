@@ -149,10 +149,11 @@ export default function ProfileForm({
     setMessage("Perfil atualizado com sucesso.");
     setIsSaving(false);
 
-    router.push("/dashboard");
-    router.refresh();
+    setTimeout(() => {
+      router.replace("/dashboard");
+    }, 1200);
   }
-
+  
   return (
     <Card className="rounded-[28px] p-6">
       <form onSubmit={handleSubmit} className="space-y-5">
