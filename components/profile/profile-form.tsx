@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+
 import Card from "@/components/ui/card";
 import Button from "@/components/ui/Button";
 import TextMessage from "@/components/ui/text-message";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { fetchAddressByCep } from "@/lib/services/cep";
 
 type ProfileFormProps = {
   userId: string;
@@ -43,6 +45,7 @@ export default function ProfileForm({
   const [number, setNumber] = useState(initialNumber);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [message, setMessage] = useState("");
   const [messageVariant, setMessageVariant] = useState<
     "default" | "success" | "error"
@@ -56,6 +59,56 @@ export default function ProfileForm({
     const numeric = normalizeCep(value);
     if (numeric.length <= 5) return numeric;
     return `${numeric.slice(0, 5)}-${numeric.slice(5)}`;
+  }
+
+  async function handleCepLookup(rawCep: string) {
+    const cleanCep = normalizeCep(rawCep);
+
+    if (cleanCep.length !== 8) {
+      return;
+    }
+
+    try {
+      setIsFetchingCep(true);
+
+      const data = await fetchAddressByCep(cleanCep);
+
+      setCep(normalizeCep(data.cep ?? cleanCep));
+      setAddress(data.logradouro ?? "");
+      setCity(data.localidade ?? "");
+      setState(data.uf ?? "");
+
+      setMessage("");
+      setMessageVariant("default");
+    } catch (error) {
+      console.error("Erro ao buscar CEP:", error);
+      setMessageVariant("error");
+      setMessage(
+        error instanceof Error ? error.message : "Não foi possível consultar o CEP."
+      );
+    } finally {
+      setIsFetchingCep(false);
+    }
+  }
+
+  async function handleCepChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const rawValue = event.target.value;
+    const cleanCep = normalizeCep(rawValue);
+
+    setCep(cleanCep);
+
+    if (messageVariant === "error") {
+      setMessage("");
+      setMessageVariant("default");
+    }
+
+    if (cleanCep.length === 8) {
+      await handleCepLookup(cleanCep);
+    }
+  }
+
+  async function handleCepBlur() {
+    await handleCepLookup(cep);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -85,18 +138,19 @@ export default function ProfileForm({
     const { error } = await supabase.from("profiles").upsert(payload);
 
     if (error) {
+      console.error("Erro ao salvar perfil:", error);
       setMessageVariant("error");
       setMessage("Não foi possível salvar seu perfil.");
       setIsSaving(false);
       return;
     }
 
-      setMessageVariant("success");
-      setMessage("Perfil atualizado com sucesso.");
-      setIsSaving(false);
+    setMessageVariant("success");
+    setMessage("Perfil atualizado com sucesso.");
+    setIsSaving(false);
 
-      router.push("/dashboard");
-      router.refresh();
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -123,7 +177,10 @@ export default function ProfileForm({
             htmlFor="phone"
             className="mb-2 block text-sm font-medium text-slate-700"
           >
-            Telefone <span className="text-red-500"> <strong>(Mesmo do cadastro no APP)</strong></span>
+            Telefone{" "}
+            <span className="text-red-500">
+              <strong>(Mesmo do cadastro no APP)</strong>
+            </span>
           </label>
           <input
             id="phone"
@@ -139,7 +196,10 @@ export default function ProfileForm({
             htmlFor="email"
             className="mb-2 block text-sm font-medium text-slate-700"
           >
-            E-mail <span className="text-red-500"> <strong>(Mesmo do cadastro no APP)</strong></span>
+            E-mail{" "}
+            <span className="text-red-500">
+              <strong>(Mesmo do cadastro no APP)</strong>
+            </span>
           </label>
           <input
             id="email"
@@ -161,10 +221,14 @@ export default function ProfileForm({
           <input
             id="cep"
             value={formatCep(cep)}
-            onChange={(event) => setCep(event.target.value)}
+            onChange={handleCepChange}
+            onBlur={handleCepBlur}
             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             placeholder="Digite seu CEP"
           />
+          {isFetchingCep ? (
+            <p className="mt-2 text-xs text-slate-500">Buscando endereço pelo CEP...</p>
+          ) : null}
         </div>
 
         <div>
@@ -235,7 +299,7 @@ export default function ProfileForm({
         </div>
 
         <div className="pt-2">
-          <Button type="submit" disabled={isSaving}>
+          <Button type="submit" disabled={isSaving || isFetchingCep}>
             {isSaving ? "Salvando..." : "Salvar alterações"}
           </Button>
         </div>
