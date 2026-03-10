@@ -73,7 +73,7 @@ export default async function DashboardPage() {
       .from("profiles")
       .select("name, phone, cep, city, state, address")
       .eq("id", user.id)
-      .single<ProfileData>(),
+      .maybeSingle<ProfileData>(),
 
     supabase
       .from("certificates")

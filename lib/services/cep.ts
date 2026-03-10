@@ -14,16 +14,17 @@ export async function fetchAddressByCep(cep: string): Promise<CepResponse> {
     throw new Error("CEP inválido.");
   }
 
-  const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+  const response = await fetch(`/api/cep/${cleanCep}`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const data = await response.json();
 
   if (!response.ok) {
-    throw new Error("Erro ao consultar CEP.");
-  }
-
-  const data: CepResponse = await response.json();
-
-  if (data.erro) {
-    throw new Error("CEP não encontrado.");
+    throw new Error(data?.error || "Erro ao consultar CEP.");
   }
 
   return data;
