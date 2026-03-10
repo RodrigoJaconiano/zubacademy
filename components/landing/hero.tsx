@@ -16,12 +16,12 @@ export default function Hero() {
           </div>
 
           <h1 className="mt-6 max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-            Capacitação moderna para{" "}
+            Capacitação para{" "}
             <span className="text-blue-600">separadores de pedidos</span>
           </h1>
 
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-            Uma experiência completa de aprendizado com acesso seguro por e-mail,
+            Uma experiência completa de aprendizado com acesso seguro  <br></br> por e-mail,
             progresso por aula, avaliação final e liberação de certificado.
           </p>
 
@@ -77,15 +77,18 @@ export default function Hero() {
               </p>
             </div>
 
-            <div className="relative min-h-[520px]">
-              <Image
-                src="https://picsum.photos/seed/zubale-tech/900/1100"
-                alt="Treinamento profissional"
-                fill
-                className="object-cover"
-                priority
-              />
-            </div>
+          <div className="relative min-h-[520px] p-6">
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              className="h-full w-full rounded-2xl object-cover"
+            >
+              <source src="/introzubale.mp4" type="video/mp4" />
+            </video>
+          </div>
           </div>
         </div>
       </div>
