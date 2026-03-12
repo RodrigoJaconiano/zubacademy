@@ -8,6 +8,9 @@ type ProfileRequestBody = {
   address?: string;
   city?: string;
   state?: string;
+  number?: string;
+  terms_accepted?: boolean;
+  terms_version?: string;
 };
 
 export async function POST(request: Request) {
@@ -43,10 +46,20 @@ export async function POST(request: Request) {
     const address = body.address?.trim();
     const city = body.city?.trim();
     const state = body.state?.trim();
+    const number = body.number?.trim();
+    const termsAccepted = Boolean(body.terms_accepted);
+    const termsVersion = body.terms_version?.trim() || "v1";
 
-    if (!name || !phone || !cep || !city || !state) {
+    if (!name || !phone || !cep || !city || !state || !address || !number) {
       return NextResponse.json(
         { error: "Preencha os campos obrigatórios." },
+        { status: 400 }
+      );
+    }
+
+    if (!termsAccepted) {
+      return NextResponse.json(
+        { error: "Você precisa aceitar os termos de utilização." },
         { status: 400 }
       );
     }
@@ -61,6 +74,10 @@ export async function POST(request: Request) {
         address,
         city,
         state,
+        number,
+        terms_accepted: true,
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: termsVersion,
         updated_at: new Date().toISOString(),
       },
       {

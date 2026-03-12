@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { courseData } from "@/lib/data/course";
 
@@ -27,6 +28,10 @@ type CertificateRow = {
   id: string;
   certificate_code?: string | null;
   issued_at?: string | null;
+};
+
+type ProfileWithTerms = ProfileData & {
+  terms_accepted?: boolean | null;
 };
 
 export default async function DashboardPage() {
@@ -71,9 +76,9 @@ export default async function DashboardPage() {
 
     supabase
       .from("profiles")
-      .select("name, phone, cep, city, state, address, number")
+      .select("name, phone, cep, city, state, address, number, terms_accepted")
       .eq("id", user.id)
-      .maybeSingle<ProfileData>(),
+      .maybeSingle<ProfileWithTerms>(),
 
     supabase
       .from("certificates")
@@ -116,6 +121,11 @@ export default async function DashboardPage() {
 
   const missingProfileFields = getMissingProfileFields(profile);
   const profileIncomplete = missingProfileFields.length > 0;
+  const termsAccepted = Boolean(profile?.terms_accepted);
+
+  if (profileIncomplete || !termsAccepted) {
+    redirect("/perfil");
+  }
 
   const completedLessons = progressData?.length ?? 0;
   const totalLessons = courseData.lessons.length;
@@ -177,57 +187,6 @@ export default async function DashboardPage() {
           </div>
         </div>
       </Card>
-
-      {profileIncomplete && (
-        <Card className="rounded-[28px] border-amber-200 bg-amber-50/80">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-sm font-medium text-amber-700">
-                Cadastro incompleto
-              </p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-900">
-                Complete seus dados antes de avançar
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Para liberar todas as etapas da plataforma e emitir seu
-                certificado corretamente, precisamos que seu perfil esteja
-                completo.
-              </p>
-
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-white/80 p-4">
-                <p className="text-sm font-medium text-slate-900">
-                  Campos pendentes:
-                </p>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {missingProfileFields.map((field) => (
-                    <span
-                      key={field}
-                      className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700"
-                    >
-                      {field}
-                    </span>
-                  ))}
-                </div>
-
-                <p className="mt-4 text-sm text-slate-600">
-                  Enquanto isso, algumas ações ficarão bloqueadas, como curso,
-                  quiz final e certificação.
-                </p>
-              </div>
-            </div>
-
-            <div className="w-full lg:w-auto">
-              <Link
-                href="/perfil"
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-md lg:w-auto"
-              >
-                Completar cadastro
-              </Link>
-            </div>
-          </div>
-        </Card>
-      )}
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="rounded-[28px]">
@@ -297,31 +256,21 @@ export default async function DashboardPage() {
             ) : (
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href={profileIncomplete ? "/perfil" : "/curso"}
-                  className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold shadow-sm transition duration-200 ${
-                    profileIncomplete
-                      ? "bg-amber-500 text-white hover:-translate-y-0.5 hover:bg-amber-600 hover:shadow-md"
-                      : "bg-blue-600 !text-white hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
-                  }`}
+                  href="/curso"
+                  className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
                 >
-                  {profileIncomplete
-                    ? "Complete o cadastro para iniciar o curso"
-                    : dashboardState.primaryCourseActionLabel}
+                  {dashboardState.primaryCourseActionLabel}
                 </Link>
 
                 <Link
-                  href={profileIncomplete ? "/perfil" : "/quiz"}
+                  href="/quiz"
                   className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-200 ${
                     dashboardState.quizUnlocked && !quizCompleted
                       ? "border border-blue-200 bg-blue-50 text-blue-700 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white"
-                      : profileIncomplete
-                      ? "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
                       : "border border-slate-200 bg-slate-100 text-slate-400"
                   }`}
                 >
-                  {profileIncomplete
-                    ? "Complete o cadastro para liberar o quiz"
-                    : quizCompleted
+                  {quizCompleted
                     ? "Quiz concluído"
                     : dashboardState.quizUnlocked
                     ? "Ir para o quiz final"
@@ -379,16 +328,10 @@ export default async function DashboardPage() {
 
             <div className="mt-4 grid gap-3">
               <Link
-                href={profileIncomplete ? "/perfil" : "/curso"}
-                className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                  profileIncomplete
-                    ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                }`}
+                href="/curso"
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
               >
-                {profileIncomplete
-                  ? "Complete o cadastro para iniciar o curso"
-                  : "Abrir curso"}
+                Abrir curso
               </Link>
 
               <Link
@@ -396,8 +339,6 @@ export default async function DashboardPage() {
                 className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
                   dashboardState.quizUnlocked && !quizCompleted
                     ? "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                    : profileIncomplete
-                    ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
                     : "border-slate-200 bg-slate-100 text-slate-400"
                 }`}
               >
@@ -406,11 +347,7 @@ export default async function DashboardPage() {
 
               <Link
                 href={dashboardState.quickCertificateHref}
-                className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                  profileIncomplete
-                    ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                }`}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
               >
                 {dashboardState.quickCertificateLabel}
               </Link>
