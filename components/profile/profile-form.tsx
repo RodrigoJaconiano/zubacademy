@@ -103,31 +103,53 @@ export default function ProfileForm({
     return `${numeric.slice(0, 5)}-${numeric.slice(5)}`;
   }
 
+  function validateForm() {
+    if (!name.trim()) {
+      return "Preencha o campo Nome completo corretamente.";
+    }
+
+    if (!phone.trim()) {
+      return "Preencha o campo Telefone corretamente.";
+    }
+
+    if (!email.trim()) {
+      return "Preencha o campo E-mail corretamente.";
+    }
+
+    if (normalizeCpf(cpf).length !== 11) {
+      return "Preencha o campo CPF corretamente.";
+    }
+
+    if (normalizeCep(cep).length !== 8) {
+      return "Preencha o campo CEP corretamente.";
+    }
+
+    if (!city.trim()) {
+      return "Preencha o campo Cidade corretamente.";
+    }
+
+    if (!state.trim()) {
+      return "Preencha o campo Estado corretamente.";
+    }
+
+    if (!address.trim()) {
+      return "Preencha o campo Endereço corretamente.";
+    }
+
+    if (!number.trim()) {
+      return "Preencha o campo Número corretamente.";
+    }
+
+    if (!termsAccepted) {
+      return "Você precisa aceitar os termos para continuar.";
+    }
+
+    return null;
+  }
+
   const isFormReady = useMemo(() => {
-    return Boolean(
-      name.trim() &&
-        phone.trim() &&
-        email.trim() &&
-        normalizeCpf(cpf).length === 11 &&
-        normalizeCep(cep).length === 8 &&
-        city.trim() &&
-        state.trim() &&
-        address.trim() &&
-        number.trim() &&
-        termsAccepted
-    );
-  }, [
-    name,
-    phone,
-    email,
-    cpf,
-    cep,
-    city,
-    state,
-    address,
-    number,
-    termsAccepted,
-  ]);
+    return validateForm() === null;
+  }, [name, phone, email, cpf, cep, city, state, address, number, termsAccepted]);
 
   async function handleCepLookup(rawCep: string) {
     const cleanCep = normalizeCep(rawCep);
@@ -146,8 +168,10 @@ export default function ProfileForm({
       setCity(data.localidade ?? "");
       setState(data.uf ?? "");
 
-      setMessage("");
-      setMessageVariant("default");
+      if (messageVariant === "error") {
+        setMessage("");
+        setMessageVariant("default");
+      }
     } catch (error) {
       console.error("Erro ao buscar CEP:", error);
       setMessageVariant("error");
@@ -192,38 +216,11 @@ export default function ProfileForm({
     setMessage("");
     setMessageVariant("default");
 
-    if (
-      !name.trim() ||
-      !phone.trim() ||
-      !email.trim() ||
-      normalizeCpf(cpf).length !== 11 ||
-      normalizeCep(cep).length !== 8 ||
-      !city.trim() ||
-      !state.trim()
-    ) {
-      setMessageVariant("error");
-      setMessage("Preencha todos os campos obrigatórios. O CPF deve ter 11 dígitos.");
-      setIsSaving(false);
-      return;
-    }
+    const validationError = validateForm();
 
-    if (!address.trim()) {
+    if (validationError) {
       setMessageVariant("error");
-      setMessage("O campo Endereço é obrigatório.");
-      setIsSaving(false);
-      return;
-    }
-
-    if (!number.trim()) {
-      setMessageVariant("error");
-      setMessage("O campo Número é obrigatório.");
-      setIsSaving(false);
-      return;
-    }
-
-    if (!termsAccepted) {
-      setMessageVariant("error");
-      setMessage("Você precisa aceitar os termos para continuar.");
+      setMessage(validationError);
       setIsSaving(false);
       return;
     }
@@ -336,7 +333,13 @@ export default function ProfileForm({
             <input
               id="cpf"
               value={formatCpf(cpf)}
-              onChange={(event) => setCpf(normalizeCpf(event.target.value))}
+              onChange={(event) => {
+                setCpf(normalizeCpf(event.target.value));
+                if (messageVariant === "error") {
+                  setMessage("");
+                  setMessageVariant("default");
+                }
+              }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu CPF"
               inputMode="numeric"
@@ -378,7 +381,13 @@ export default function ProfileForm({
             <input
               id="city"
               value={city}
-              onChange={(event) => setCity(event.target.value)}
+              onChange={(event) => {
+                setCity(event.target.value);
+                if (messageVariant === "error") {
+                  setMessage("");
+                  setMessageVariant("default");
+                }
+              }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite sua cidade"
             />
@@ -394,7 +403,13 @@ export default function ProfileForm({
             <input
               id="state"
               value={state}
-              onChange={(event) => setState(event.target.value)}
+              onChange={(event) => {
+                setState(event.target.value);
+                if (messageVariant === "error") {
+                  setMessage("");
+                  setMessageVariant("default");
+                }
+              }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu estado"
             />
@@ -411,7 +426,13 @@ export default function ProfileForm({
               <input
                 id="address"
                 value={address}
-                onChange={(event) => setAddress(event.target.value)}
+                onChange={(event) => {
+                  setAddress(event.target.value);
+                  if (messageVariant === "error") {
+                    setMessage("");
+                    setMessageVariant("default");
+                  }
+                }}
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 placeholder="Digite seu endereço"
               />
@@ -427,7 +448,13 @@ export default function ProfileForm({
               <input
                 id="number"
                 value={number}
-                onChange={(event) => setNumber(event.target.value)}
+                onChange={(event) => {
+                  setNumber(event.target.value);
+                  if (messageVariant === "error") {
+                    setMessage("");
+                    setMessageVariant("default");
+                  }
+                }}
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 placeholder="Ex: 123"
                 required
@@ -455,7 +482,13 @@ export default function ProfileForm({
                   className="mt-1"
                   checked={termsAccepted}
                   disabled={!hasOpenedTerms}
-                  onChange={(event) => setTermsAccepted(event.target.checked)}
+                  onChange={(event) => {
+                    setTermsAccepted(event.target.checked);
+                    if (messageVariant === "error") {
+                      setMessage("");
+                      setMessageVariant("default");
+                    }
+                  }}
                 />
                 <span>
                   Li e concordo com os termos de utilização da plataforma.
