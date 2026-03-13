@@ -20,10 +20,12 @@ export function calculateProgress(completed: number, total: number): number {
 export type ProfileData = {
   name?: string | null;
   phone?: string | null;
+  cpf?: string | null;
   cep?: string | null;
   city?: string | null;
   state?: string | null;
   address?: string | null;
+  number?: string | null;
 };
 
 export function getMissingProfileFields(profile: ProfileData | null) {
@@ -31,10 +33,12 @@ export function getMissingProfileFields(profile: ProfileData | null) {
 
   if (!profile?.name) missingFields.push("Nome completo");
   if (!profile?.phone) missingFields.push("Telefone");
+  if (!profile?.cpf) missingFields.push("CPF");
   if (!profile?.cep) missingFields.push("CEP");
   if (!profile?.city) missingFields.push("Cidade");
   if (!profile?.state) missingFields.push("Estado");
   if (!profile?.address) missingFields.push("Endereço");
+  if (!profile?.number) missingFields.push("Número");
 
   return missingFields;
 }
@@ -50,7 +54,7 @@ type DashboardStateInput = {
 type DashboardStep = {
   title: string;
   description: string;
-  badgeLabel: string;
+  badgeLabel: "Cadastro pendente" | "Quiz bloqueado" | "Quiz liberado" | "Quiz concluído" | "Certificado liberado";
   badgeVariant: "success" | "warning" | "info";
 };
 

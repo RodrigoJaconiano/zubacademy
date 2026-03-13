@@ -30,7 +30,15 @@ type CertificateRow = {
   issued_at?: string | null;
 };
 
-type ProfileWithTerms = ProfileData & {
+type RawProfileRow = {
+  name?: string | null;
+  phone?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  number?: string | number | null;
   terms_accepted?: boolean | null;
 };
 
@@ -64,7 +72,7 @@ export default async function DashboardPage() {
 
   const [
     { data: progressData, error: progressError },
-    { data: profile, error: profileError },
+    { data: rawProfile, error: profileError },
     { data: certificateData, error: certificateError },
     { data: quizAttemptData, error: quizError },
   ] = await Promise.all([
@@ -76,9 +84,11 @@ export default async function DashboardPage() {
 
     supabase
       .from("profiles")
-      .select("name, phone, cep, city, state, address, number, terms_accepted")
+      .select(
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+      )
       .eq("id", user.id)
-      .maybeSingle<ProfileWithTerms>(),
+      .maybeSingle(),
 
     supabase
       .from("certificates")
@@ -119,9 +129,27 @@ export default async function DashboardPage() {
     );
   }
 
+  const profileRow = rawProfile as RawProfileRow | null;
+
+  const profile: ProfileData | null = profileRow
+    ? {
+        name: profileRow.name ?? null,
+        phone: profileRow.phone ?? null,
+        cpf: profileRow.cpf ?? null,
+        cep: profileRow.cep ?? null,
+        city: profileRow.city ?? null,
+        state: profileRow.state ?? null,
+        address: profileRow.address ?? null,
+        number:
+          profileRow.number === null || profileRow.number === undefined
+            ? null
+            : String(profileRow.number),
+      }
+    : null;
+
   const missingProfileFields = getMissingProfileFields(profile);
   const profileIncomplete = missingProfileFields.length > 0;
-  const termsAccepted = Boolean(profile?.terms_accepted);
+  const termsAccepted = Boolean(profileRow?.terms_accepted);
 
   if (profileIncomplete || !termsAccepted) {
     redirect("/perfil");

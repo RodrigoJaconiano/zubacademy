@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 function isProfileIncomplete(profile: {
   name?: string | null;
   phone?: string | null;
+  cpf?: string | null;
   cep?: string | null;
   city?: string | null;
   state?: string | null;
@@ -12,13 +13,16 @@ function isProfileIncomplete(profile: {
 } | null) {
   if (!profile) return true;
 
-  return !profile.name?.trim()
-    || !profile.phone?.trim()
-    || !profile.cep?.trim()
-    || !profile.city?.trim()
-    || !profile.state?.trim()
-    || !profile.address?.trim()
-    || !profile.number?.trim();
+  return (
+    !profile.name?.trim() ||
+    !profile.phone?.trim() ||
+    !profile.cpf?.trim() ||
+    !profile.cep?.trim() ||
+    !profile.city?.trim() ||
+    !profile.state?.trim() ||
+    !profile.address?.trim() ||
+    !profile.number?.trim()
+  );
 }
 
 export async function GET(request: Request) {
@@ -42,7 +46,7 @@ export async function GET(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, phone, cep, city, state, address, number, terms_accepted")
+    .select("name, phone, cpf, cep, city, state, address, number, terms_accepted")
     .eq("id", user.id)
     .maybeSingle();
 

@@ -1,10 +1,27 @@
+import { redirect } from "next/navigation";
 import PageContainer from "@/components/ui/page-container";
 import PageState from "@/components/ui/page-state";
 import QuizClient from "@/components/quiz/QuizClient";
 import { createClient } from "@/lib/supabase/server";
 import { courseData, quizQuestions } from "@/lib/data/course";
+import {
+  getMissingProfileFields,
+  type ProfileData,
+} from "@/lib/utils/progress";
 
 export const dynamic = "force-dynamic";
+
+type RawProfileRow = {
+  name?: string | null;
+  phone?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  number?: string | number | null;
+  terms_accepted?: boolean | null;
+};
 
 export default async function QuizPage() {
   const supabase = await createClient();
@@ -27,13 +44,26 @@ export default async function QuizPage() {
     );
   }
 
-  const { data: progressData, error } = await supabase
-    .from("lesson_progress")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("completed", true);
+  const [{ data: progressData, error: progressError }, { data: rawProfile, error: profileError }] =
+    await Promise.all([
+      supabase
+        .from("lesson_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("completed", true),
 
-  if (error) {
+      supabase
+        .from("profiles")
+        .select(
+          "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+        )
+        .eq("id", user.id)
+        .maybeSingle(),
+    ]);
+
+  if (progressError || profileError) {
+    console.error("Erro ao carregar quiz:", progressError || profileError);
+
     return (
       <PageContainer>
         <PageState
@@ -43,6 +73,31 @@ export default async function QuizPage() {
         />
       </PageContainer>
     );
+  }
+
+  const profileRow = rawProfile as RawProfileRow | null;
+
+  const profile: ProfileData | null = profileRow
+    ? {
+        name: profileRow.name ?? null,
+        phone: profileRow.phone ?? null,
+        cpf: profileRow.cpf ?? null,
+        cep: profileRow.cep ?? null,
+        city: profileRow.city ?? null,
+        state: profileRow.state ?? null,
+        address: profileRow.address ?? null,
+        number:
+          profileRow.number === null || profileRow.number === undefined
+            ? null
+            : String(profileRow.number),
+      }
+    : null;
+
+  const profileIncomplete = getMissingProfileFields(profile).length > 0;
+  const termsAccepted = Boolean(profileRow?.terms_accepted);
+
+  if (profileIncomplete || !termsAccepted) {
+    redirect("/perfil");
   }
 
   const completedLessons = progressData?.length ?? 0;

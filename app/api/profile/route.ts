@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 type ProfileRequestBody = {
   name?: string;
   phone?: string;
+  cpf?: string;
   cep?: string;
   address?: string;
   city?: string;
@@ -12,6 +13,14 @@ type ProfileRequestBody = {
   terms_accepted?: boolean;
   terms_version?: string;
 };
+
+function normalizeCpf(value?: string) {
+  return (value ?? "").replace(/\D/g, "").slice(0, 11);
+}
+
+function normalizeCep(value?: string) {
+  return (value ?? "").replace(/\D/g, "").slice(0, 8);
+}
 
 export async function POST(request: Request) {
   try {
@@ -42,7 +51,8 @@ export async function POST(request: Request) {
 
     const name = body.name?.trim();
     const phone = body.phone?.trim();
-    const cep = body.cep?.trim();
+    const cpf = normalizeCpf(body.cpf);
+    const cep = normalizeCep(body.cep);
     const address = body.address?.trim();
     const city = body.city?.trim();
     const state = body.state?.trim();
@@ -50,9 +60,21 @@ export async function POST(request: Request) {
     const termsAccepted = Boolean(body.terms_accepted);
     const termsVersion = body.terms_version?.trim() || "v1";
 
-    if (!name || !phone || !cep || !city || !state || !address || !number) {
+    if (
+      !name ||
+      !phone ||
+      cpf.length !== 11 ||
+      cep.length !== 8 ||
+      !city ||
+      !state ||
+      !address ||
+      !number
+    ) {
       return NextResponse.json(
-        { error: "Preencha os campos obrigatórios." },
+        {
+          error:
+            "Preencha os campos obrigatórios. O CPF deve ter 11 dígitos e o CEP deve ter 8 dígitos.",
+        },
         { status: 400 }
       );
     }
@@ -70,6 +92,7 @@ export async function POST(request: Request) {
         email: user.email,
         name,
         phone,
+        cpf,
         cep,
         address,
         city,

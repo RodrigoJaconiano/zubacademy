@@ -30,7 +30,7 @@ export default async function PerfilPage() {
   const { data: profile, error } = await supabase
     .from("profiles")
     .select(
-      "name, phone, email, cep, city, state, address, number, terms_accepted, terms_accepted_at, terms_version"
+      "name, phone, email, cpf, cep, city, state, address, number, terms_accepted, terms_accepted_at, terms_version"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -61,6 +61,7 @@ export default async function PerfilPage() {
           initialName={profile?.name ?? ""}
           initialPhone={profile?.phone ?? ""}
           initialEmail={profile?.email ?? user.email ?? ""}
+          initialCpf={profile?.cpf ?? ""}
           initialCep={profile?.cep ?? ""}
           initialCity={profile?.city ?? ""}
           initialState={profile?.state ?? ""}

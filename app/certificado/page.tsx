@@ -1,13 +1,30 @@
+import { redirect } from "next/navigation";
 import PageContainer from "@/components/ui/page-container";
 import PageState from "@/components/ui/page-state";
 import CertificatePreview from "@/components/certificate/CertificatePreview";
 import CertificateActions from "@/components/certificate/CertificateActions";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getMissingProfileFields,
+  type ProfileData,
+} from "@/lib/utils/progress";
 
 export const dynamic = "force-dynamic";
 
 const COURSE_SLUG = "treinamento-zubale";
 const COURSE_TITLE = "Treinamento Zubale";
+
+type RawProfileRow = {
+  name?: string | null;
+  phone?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  number?: string | number | null;
+  terms_accepted?: boolean | null;
+};
 
 function formatDate(dateString: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -41,20 +58,23 @@ export default async function CertificadoPage() {
     );
   }
 
-  const profileResponse = await supabase
-    .from("profiles")
-    .select("name")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [profileResponse, certificateResponse] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("certificates")
+      .select("certificate_code, issued_at, course_slug")
+      .eq("user_id", user.id)
+      .eq("course_slug", COURSE_SLUG)
+      .maybeSingle(),
+  ]);
 
-  const certificateResponse = await supabase
-    .from("certificates")
-    .select("certificate_code, issued_at, course_slug")
-    .eq("user_id", user.id)
-    .eq("course_slug", COURSE_SLUG)
-    .maybeSingle();
-
-  const { data: profile, error: profileError } = profileResponse;
+  const { data: rawProfile, error: profileError } = profileResponse;
   const { data: certificate, error: certificateError } = certificateResponse;
 
   if (profileError) {
@@ -68,7 +88,7 @@ export default async function CertificadoPage() {
     );
   }
 
-  if (certificateError) {
+  if (profileError || certificateError) {
     return (
       <PageContainer>
         <PageState
@@ -78,6 +98,31 @@ export default async function CertificadoPage() {
         />
       </PageContainer>
     );
+  }
+
+  const profileRow = rawProfile as RawProfileRow | null;
+
+  const profile: ProfileData | null = profileRow
+    ? {
+        name: profileRow.name ?? null,
+        phone: profileRow.phone ?? null,
+        cpf: profileRow.cpf ?? null,
+        cep: profileRow.cep ?? null,
+        city: profileRow.city ?? null,
+        state: profileRow.state ?? null,
+        address: profileRow.address ?? null,
+        number:
+          profileRow.number === null || profileRow.number === undefined
+            ? null
+            : String(profileRow.number),
+      }
+    : null;
+
+  const profileIncomplete = getMissingProfileFields(profile).length > 0;
+  const termsAccepted = Boolean(profileRow?.terms_accepted);
+
+  if (profileIncomplete || !termsAccepted) {
+    redirect("/perfil");
   }
 
   if (!certificate) {

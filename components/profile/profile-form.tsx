@@ -15,6 +15,7 @@ type ProfileFormProps = {
   initialName: string;
   initialPhone: string;
   initialEmail: string;
+  initialCpf: string;
   initialCep: string;
   initialCity: string;
   initialState: string;
@@ -31,6 +32,7 @@ export default function ProfileForm({
   initialName,
   initialPhone,
   initialEmail,
+  initialCpf,
   initialCep,
   initialCity,
   initialState,
@@ -45,6 +47,7 @@ export default function ProfileForm({
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [email, setEmail] = useState(initialEmail);
+  const [cpf, setCpf] = useState(initialCpf);
   const [cep, setCep] = useState(initialCep);
   const [city, setCity] = useState(initialCity);
   const [state, setState] = useState(initialState);
@@ -69,19 +72,26 @@ export default function ProfileForm({
     }
   }, [initialTermsAccepted]);
 
-  const isFormReady = useMemo(() => {
-    return Boolean(
-      name.trim() &&
-        phone.trim() &&
-        email.trim() &&
-        normalizeCep(cep).length === 8 &&
-        city.trim() &&
-        state.trim() &&
-        address.trim() &&
-        number.trim() &&
-        termsAccepted
-    );
-  }, [name, phone, email, cep, city, state, address, number, termsAccepted]);
+  function normalizeCpf(value: string) {
+    return value.replace(/\D/g, "").slice(0, 11);
+  }
+
+  function formatCpf(value: string) {
+    const numeric = normalizeCpf(value);
+
+    if (numeric.length <= 3) return numeric;
+    if (numeric.length <= 6) {
+      return `${numeric.slice(0, 3)}.${numeric.slice(3)}`;
+    }
+    if (numeric.length <= 9) {
+      return `${numeric.slice(0, 3)}.${numeric.slice(3, 6)}.${numeric.slice(6)}`;
+    }
+
+    return `${numeric.slice(0, 3)}.${numeric.slice(3, 6)}.${numeric.slice(
+      6,
+      9
+    )}-${numeric.slice(9, 11)}`;
+  }
 
   function normalizeCep(value: string) {
     return value.replace(/\D/g, "").slice(0, 8);
@@ -92,6 +102,32 @@ export default function ProfileForm({
     if (numeric.length <= 5) return numeric;
     return `${numeric.slice(0, 5)}-${numeric.slice(5)}`;
   }
+
+  const isFormReady = useMemo(() => {
+    return Boolean(
+      name.trim() &&
+        phone.trim() &&
+        email.trim() &&
+        normalizeCpf(cpf).length === 11 &&
+        normalizeCep(cep).length === 8 &&
+        city.trim() &&
+        state.trim() &&
+        address.trim() &&
+        number.trim() &&
+        termsAccepted
+    );
+  }, [
+    name,
+    phone,
+    email,
+    cpf,
+    cep,
+    city,
+    state,
+    address,
+    number,
+    termsAccepted,
+  ]);
 
   async function handleCepLookup(rawCep: string) {
     const cleanCep = normalizeCep(rawCep);
@@ -154,10 +190,19 @@ export default function ProfileForm({
     event.preventDefault();
     setIsSaving(true);
     setMessage("");
+    setMessageVariant("default");
 
-    if (!name.trim() || !phone.trim() || !normalizeCep(cep) || !city.trim() || !state.trim()) {
+    if (
+      !name.trim() ||
+      !phone.trim() ||
+      !email.trim() ||
+      normalizeCpf(cpf).length !== 11 ||
+      normalizeCep(cep).length !== 8 ||
+      !city.trim() ||
+      !state.trim()
+    ) {
       setMessageVariant("error");
-      setMessage("Preencha todos os campos obrigatórios.");
+      setMessage("Preencha todos os campos obrigatórios. O CPF deve ter 11 dígitos.");
       setIsSaving(false);
       return;
     }
@@ -188,6 +233,7 @@ export default function ProfileForm({
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim(),
+      cpf: normalizeCpf(cpf),
       cep: normalizeCep(cep),
       city: city.trim(),
       state: state.trim(),
@@ -282,6 +328,24 @@ export default function ProfileForm({
 
           <div>
             <label
+              htmlFor="cpf"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              CPF
+            </label>
+            <input
+              id="cpf"
+              value={formatCpf(cpf)}
+              onChange={(event) => setCpf(normalizeCpf(event.target.value))}
+              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              placeholder="Digite seu CPF"
+              inputMode="numeric"
+              maxLength={14}
+            />
+          </div>
+
+          <div>
+            <label
               htmlFor="cep"
               className="mb-2 block text-sm font-medium text-slate-700"
             >
@@ -294,6 +358,8 @@ export default function ProfileForm({
               onBlur={handleCepBlur}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu CEP"
+              inputMode="numeric"
+              maxLength={9}
             />
             {isFetchingCep ? (
               <p className="mt-2 text-xs text-slate-500">
@@ -405,7 +471,10 @@ export default function ProfileForm({
           </div>
 
           <div className="pt-2">
-            <Button type="submit" disabled={isSaving || isFetchingCep || !isFormReady}>
+            <Button
+              type="submit"
+              disabled={isSaving || isFetchingCep || !isFormReady}
+            >
               {isSaving ? "Salvando..." : "Salvar alterações"}
             </Button>
           </div>
