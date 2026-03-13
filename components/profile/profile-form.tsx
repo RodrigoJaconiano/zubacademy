@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import Card from "@/components/ui/card";
@@ -103,6 +103,13 @@ export default function ProfileForm({
     return `${numeric.slice(0, 5)}-${numeric.slice(5)}`;
   }
 
+  function clearErrorMessage() {
+    if (messageVariant === "error") {
+      setMessage("");
+      setMessageVariant("default");
+    }
+  }
+
   function validateForm() {
     if (!name.trim()) {
       return "Preencha o campo Nome completo corretamente.";
@@ -140,16 +147,16 @@ export default function ProfileForm({
       return "Preencha o campo Número corretamente.";
     }
 
+    if (!hasOpenedTerms) {
+      return "Leia os termos de utilização antes de continuar.";
+    }
+
     if (!termsAccepted) {
       return "Você precisa aceitar os termos para continuar.";
     }
 
     return null;
   }
-
-  const isFormReady = useMemo(() => {
-    return validateForm() === null;
-  }, [name, phone, email, cpf, cep, city, state, address, number, termsAccepted]);
 
   async function handleCepLookup(rawCep: string) {
     const cleanCep = normalizeCep(rawCep);
@@ -168,10 +175,7 @@ export default function ProfileForm({
       setCity(data.localidade ?? "");
       setState(data.uf ?? "");
 
-      if (messageVariant === "error") {
-        setMessage("");
-        setMessageVariant("default");
-      }
+      clearErrorMessage();
     } catch (error) {
       console.error("Erro ao buscar CEP:", error);
       setMessageVariant("error");
@@ -190,11 +194,7 @@ export default function ProfileForm({
     const cleanCep = normalizeCep(rawValue);
 
     setCep(cleanCep);
-
-    if (messageVariant === "error") {
-      setMessage("");
-      setMessageVariant("default");
-    }
+    clearErrorMessage();
 
     if (cleanCep.length === 8) {
       await handleCepLookup(cleanCep);
@@ -208,6 +208,7 @@ export default function ProfileForm({
   function handleOpenTerms() {
     setHasOpenedTerms(true);
     setIsTermsModalOpen(true);
+    clearErrorMessage();
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -278,7 +279,10 @@ export default function ProfileForm({
             <input
               id="name"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                clearErrorMessage();
+              }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu nome completo"
             />
@@ -297,7 +301,10 @@ export default function ProfileForm({
             <input
               id="phone"
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(event) => {
+                setPhone(event.target.value);
+                clearErrorMessage();
+              }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu telefone"
             />
@@ -317,7 +324,10 @@ export default function ProfileForm({
               id="email"
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                clearErrorMessage();
+              }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu e-mail"
             />
@@ -335,10 +345,7 @@ export default function ProfileForm({
               value={formatCpf(cpf)}
               onChange={(event) => {
                 setCpf(normalizeCpf(event.target.value));
-                if (messageVariant === "error") {
-                  setMessage("");
-                  setMessageVariant("default");
-                }
+                clearErrorMessage();
               }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu CPF"
@@ -383,10 +390,7 @@ export default function ProfileForm({
               value={city}
               onChange={(event) => {
                 setCity(event.target.value);
-                if (messageVariant === "error") {
-                  setMessage("");
-                  setMessageVariant("default");
-                }
+                clearErrorMessage();
               }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite sua cidade"
@@ -405,10 +409,7 @@ export default function ProfileForm({
               value={state}
               onChange={(event) => {
                 setState(event.target.value);
-                if (messageVariant === "error") {
-                  setMessage("");
-                  setMessageVariant("default");
-                }
+                clearErrorMessage();
               }}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Digite seu estado"
@@ -428,10 +429,7 @@ export default function ProfileForm({
                 value={address}
                 onChange={(event) => {
                   setAddress(event.target.value);
-                  if (messageVariant === "error") {
-                    setMessage("");
-                    setMessageVariant("default");
-                  }
+                  clearErrorMessage();
                 }}
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 placeholder="Digite seu endereço"
@@ -450,10 +448,7 @@ export default function ProfileForm({
                 value={number}
                 onChange={(event) => {
                   setNumber(event.target.value);
-                  if (messageVariant === "error") {
-                    setMessage("");
-                    setMessageVariant("default");
-                  }
+                  clearErrorMessage();
                 }}
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 placeholder="Ex: 123"
@@ -484,10 +479,7 @@ export default function ProfileForm({
                   disabled={!hasOpenedTerms}
                   onChange={(event) => {
                     setTermsAccepted(event.target.checked);
-                    if (messageVariant === "error") {
-                      setMessage("");
-                      setMessageVariant("default");
-                    }
+                    clearErrorMessage();
                   }}
                 />
                 <span>
@@ -504,10 +496,7 @@ export default function ProfileForm({
           </div>
 
           <div className="pt-2">
-            <Button
-              type="submit"
-              disabled={isSaving || isFetchingCep || !isFormReady}
-            >
+            <Button type="submit" disabled={isSaving || isFetchingCep}>
               {isSaving ? "Salvando..." : "Salvar alterações"}
             </Button>
           </div>
