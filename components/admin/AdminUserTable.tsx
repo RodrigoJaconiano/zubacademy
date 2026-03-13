@@ -3,46 +3,42 @@
 import { useMemo, useState } from "react";
 import Card from "@/components/ui/card";
 import Button from "@/components/ui/Button";
-
-type Profile = {
-  id: string;
-  user_id?: string | null;
-  name?: string | null;
-  email?: string | null;
-  cpf?: string | null;
-  phone?: string | null;
-  created_at?: string | null;
-  progress?: number | null;
-};
-
-type Certificate = {
-  id: string;
-  user_id?: string | null;
-};
+import type { AdminUser } from "./AdminDashboard";
 
 type Props = {
-  profiles: Profile[];
-  certificates: Certificate[];
+  users: AdminUser[];
 };
 
 const PAGE_SIZE = 10;
 
-export default function AdminUsersTable({ profiles, certificates }: Props) {
+function formatDate(date?: string | null) {
+  if (!date) return "-";
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  return parsed.toLocaleDateString("pt-BR");
+}
+
+function formatQuizStatus(user: AdminUser) {
+  if (user.quizPassed) {
+    return user.bestQuizScore !== null
+      ? `Aprovado (${user.bestQuizScore}%)`
+      : "Aprovado";
+  }
+
+  if (user.quizAttempts > 0) {
+    return user.bestQuizScore !== null
+      ? `Reprovado (${user.bestQuizScore}%)`
+      : "Reprovado";
+  }
+
+  return "Não realizado";
+}
+
+export default function AdminUsersTable({ users }: Props) {
   const [page, setPage] = useState(1);
-
-  const certifiedUsers = useMemo(() => {
-    return new Set(
-      certificates.map((certificate) => certificate.user_id).filter(Boolean)
-    );
-  }, [certificates]);
-
-  const users = useMemo(() => {
-    return profiles.map((profile) => ({
-      ...profile,
-      hasCertificate: certifiedUsers.has(profile.user_id ?? null),
-      isComplete: Boolean(profile.name && profile.cpf && profile.phone),
-    }));
-  }, [profiles, certifiedUsers]);
 
   const totalPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
 
@@ -54,23 +50,28 @@ export default function AdminUsersTable({ profiles, certificates }: Props) {
   return (
     <Card className="rounded-2xl border-slate-200">
       <div className="space-y-5">
-        <div className="flex flex-row items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Usuários</h2>
-          <span className="text-sm text-slate-500">
-            Página {page} de {totalPages}
-          </span>
+        <div className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Usuários</h2>
+            <p className="text-sm text-slate-500">
+              Página {page} de {totalPages}
+            </p>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
+          <table className="w-full min-w-[1200px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left">
                 <th className="py-3 pr-4 font-semibold text-slate-600">Nome</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Email</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">CPF</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Telefone</th>
-                <th className="py-3 pr-4 font-semibold text-slate-600">Perfil completo</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Role</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Perfil</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Progresso</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Quiz</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Tentativas</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Certificado</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Cadastro</th>
               </tr>
@@ -83,26 +84,29 @@ export default function AdminUsersTable({ profiles, certificates }: Props) {
                   <td className="py-3 pr-4 text-slate-600">{user.email || "-"}</td>
                   <td className="py-3 pr-4 text-slate-600">{user.cpf || "-"}</td>
                   <td className="py-3 pr-4 text-slate-600">{user.phone || "-"}</td>
+                  <td className="py-3 pr-4 text-slate-600">{user.app_role || "-"}</td>
                   <td className="py-3 pr-4 text-slate-600">
-                    {user.isComplete ? "Sim" : "Não"}
+                    {user.isComplete ? "Completo" : "Incompleto"}
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
-                    {user.progress ?? 0}%
+                    {user.progress}% ({user.completedLessons}/{user.totalLessons})
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
-                    {user.hasCertificate ? "Sim" : "Não"}
+                    {formatQuizStatus(user)}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">{user.quizAttempts}</td>
+                  <td className="py-3 pr-4 text-slate-600">
+                    {user.hasCertificate ? `Sim (${user.certificateCount})` : "Não"}
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
-                    {user.created_at
-                      ? new Date(user.created_at).toLocaleDateString("pt-BR")
-                      : "-"}
+                    {formatDate(user.created_at)}
                   </td>
                 </tr>
               ))}
 
               {paginatedUsers.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-500">
+                  <td colSpan={11} className="py-8 text-center text-slate-500">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
@@ -116,6 +120,7 @@ export default function AdminUsersTable({ profiles, certificates }: Props) {
             type="button"
             onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
             disabled={page === 1}
+            className="w-auto"
           >
             Anterior
           </Button>
@@ -124,6 +129,7 @@ export default function AdminUsersTable({ profiles, certificates }: Props) {
             type="button"
             onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
             disabled={page === totalPages}
+            className="w-auto"
           >
             Próxima
           </Button>

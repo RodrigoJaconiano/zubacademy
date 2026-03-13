@@ -14,11 +14,31 @@ export default async function AppHeader({ userName }: AppHeaderProps) {
     Boolean(normalizedUserName) && normalizedUserName !== "Aluno(a)";
 
   const supabase = await createClient();
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const admin = isZubaleAdmin(user?.email);
+  let appRole: string | null = null;
+
+  if (user?.id) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("app_role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Erro ao carregar app_role no header:", profileError.message);
+    }
+
+    appRole = profile?.app_role ?? null;
+  }
+
+  const admin = isZubaleAdmin({
+    email: user?.email,
+    appRole,
+  });
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">

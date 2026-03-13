@@ -4,18 +4,28 @@ import AdminStatsCards from "./AdminStatsCards";
 import AdminCharts from "./AdminCharts";
 import AdminUsersTable from "./AdminUserTable";
 
-type Profile = {
+export type AdminUser = {
   id: string;
-  user_id?: string | null;
-  name?: string | null;
-  email?: string | null;
-  cpf?: string | null;
-  phone?: string | null;
-  created_at?: string | null;
-  progress?: number | null;
+  name: string | null;
+  email: string | null;
+  cpf: string | null;
+  phone: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  app_role: string | null;
+  progress: number;
+  completedLessons: number;
+  totalLessons: number;
+  isComplete: boolean;
+  hasCertificate: boolean;
+  certificateCount: number;
+  quizAttempts: number;
+  bestQuizScore: number | null;
+  quizPassed: boolean;
+  lastQuizAt: string | null;
 };
 
-type Certificate = {
+export type AdminCertificate = {
   id: string;
   user_id?: string | null;
   certificate_code?: string | null;
@@ -24,12 +34,12 @@ type Certificate = {
 };
 
 type AdminDashboardProps = {
-  profiles: Profile[];
-  certificates: Certificate[];
+  users: AdminUser[];
+  certificates: AdminCertificate[];
 };
 
 export default function AdminDashboard({
-  profiles,
+  users,
   certificates,
 }: AdminDashboardProps) {
   return (
@@ -39,13 +49,13 @@ export default function AdminDashboard({
           Painel Administrativo
         </h1>
         <p className="text-sm text-slate-600">
-          Visão geral dos usuários, progresso e certificados da plataforma.
+          Visão geral dos usuários, progresso, quiz e certificados da plataforma.
         </p>
       </section>
 
-      <AdminStatsCards profiles={profiles} certificates={certificates} />
-      <AdminCharts profiles={profiles} certificates={certificates} />
-      <AdminUsersTable profiles={profiles} certificates={certificates} />
+      <AdminStatsCards users={users} certificates={certificates} />
+      <AdminCharts users={users} certificates={certificates} />
+      <AdminUsersTable users={users} />
     </main>
   );
 }

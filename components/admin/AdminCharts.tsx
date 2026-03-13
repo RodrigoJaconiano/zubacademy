@@ -13,21 +13,11 @@ import {
   Line,
 } from "recharts";
 import Card from "@/components/ui/card";
-
-type Profile = {
-  id: string;
-  created_at?: string | null;
-  progress?: number | null;
-};
-
-type Certificate = {
-  id: string;
-  issued_at?: string | null;
-};
+import type { AdminCertificate, AdminUser } from "./AdminDashboard";
 
 type Props = {
-  profiles: Profile[];
-  certificates: Certificate[];
+  users: AdminUser[];
+  certificates: AdminCertificate[];
 };
 
 function formatMonthKey(dateString?: string | null) {
@@ -35,18 +25,20 @@ function formatMonthKey(dateString?: string | null) {
 
   const date = new Date(dateString);
 
+  if (Number.isNaN(date.getTime())) return "Sem data";
+
   return new Intl.DateTimeFormat("pt-BR", {
     month: "short",
     year: "2-digit",
   }).format(date);
 }
 
-export default function AdminCharts({ profiles, certificates }: Props) {
+export default function AdminCharts({ users, certificates }: Props) {
   const usersByMonth = useMemo(() => {
     const map = new Map<string, number>();
 
-    profiles.forEach((profile) => {
-      const key = formatMonthKey(profile.created_at);
+    users.forEach((user) => {
+      const key = formatMonthKey(user.created_at);
       map.set(key, (map.get(key) ?? 0) + 1);
     });
 
@@ -54,7 +46,7 @@ export default function AdminCharts({ profiles, certificates }: Props) {
       month,
       total,
     }));
-  }, [profiles]);
+  }, [users]);
 
   const certificatesByMonth = useMemo(() => {
     const map = new Map<string, number>();
@@ -78,8 +70,8 @@ export default function AdminCharts({ profiles, certificates }: Props) {
       { label: "76-100%", total: 0 },
     ];
 
-    profiles.forEach((profile) => {
-      const progress = profile.progress ?? 0;
+    users.forEach((user) => {
+      const progress = user.progress ?? 0;
 
       if (progress <= 25) ranges[0].total += 1;
       else if (progress <= 50) ranges[1].total += 1;
@@ -88,7 +80,7 @@ export default function AdminCharts({ profiles, certificates }: Props) {
     });
 
     return ranges;
-  }, [profiles]);
+  }, [users]);
 
   return (
     <section className="grid gap-4 xl:grid-cols-3">
