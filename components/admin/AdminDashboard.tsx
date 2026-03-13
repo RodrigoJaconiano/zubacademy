@@ -18,6 +18,7 @@ export type AdminUser = {
   completedLessons: number;
   totalLessons: number;
   isComplete: boolean;
+  missingItems: string[];
   hasCertificate: boolean;
   certificateCount: number;
   quizAttempts: number;
@@ -90,6 +91,7 @@ export default function AdminDashboard({
         telefone: user.phone ?? "",
         role: user.app_role ?? "",
         perfil_completo: user.isComplete ? "Sim" : "Não",
+        pendencias: user.missingItems.join(" | "),
         progresso_percentual: user.progress,
         aulas_concluidas: user.completedLessons,
         total_aulas: user.totalLessons,

@@ -37,6 +37,55 @@ function formatQuizStatus(user: AdminUser) {
   return "Não realizado";
 }
 
+function IncompleteProfileBadge({ missingItems }: { missingItems: string[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  if (missingItems.length === 0) {
+    return <span className="text-slate-600">Completo</span>;
+  }
+
+  return (
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        onBlur={() => setIsOpen(false)}
+        className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300"
+        aria-expanded={isOpen}
+        aria-label="Ver pendências do perfil"
+      >
+        <span>Incompleto</span>
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-200 px-1 text-[11px] font-bold text-amber-800">
+          {missingItems.length}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-xl">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Pendências do perfil
+          </p>
+
+          <ul className="space-y-1.5">
+            {missingItems.map((item) => (
+              <li
+                key={item}
+                className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm text-slate-700"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminUsersTable({ users }: Props) {
   const [page, setPage] = useState(1);
 
@@ -86,7 +135,7 @@ export default function AdminUsersTable({ users }: Props) {
                   <td className="py-3 pr-4 text-slate-600">{user.phone || "-"}</td>
                   <td className="py-3 pr-4 text-slate-600">{user.app_role || "-"}</td>
                   <td className="py-3 pr-4 text-slate-600">
-                    {user.isComplete ? "Completo" : "Incompleto"}
+                    <IncompleteProfileBadge missingItems={user.missingItems} />
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
                     {user.progress}% ({user.completedLessons}/{user.totalLessons})
