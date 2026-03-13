@@ -33,6 +33,19 @@ function formatMonthKey(dateString?: string | null) {
   }).format(date);
 }
 
+function formatDayKey(dateString?: string | null) {
+  if (!dateString) return "Sem data";
+
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) return "Sem data";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
 export default function AdminCharts({ users, certificates }: Props) {
   const usersByMonth = useMemo(() => {
     const map = new Map<string, number>();
@@ -44,6 +57,20 @@ export default function AdminCharts({ users, certificates }: Props) {
 
     return Array.from(map.entries()).map(([month, total]) => ({
       month,
+      total,
+    }));
+  }, [users]);
+
+  const usersByDay = useMemo(() => {
+    const map = new Map<string, number>();
+
+    users.forEach((user) => {
+      const key = formatDayKey(user.created_at);
+      map.set(key, (map.get(key) ?? 0) + 1);
+    });
+
+    return Array.from(map.entries()).map(([day, total]) => ({
+      day,
       total,
     }));
   }, [users]);
@@ -119,6 +146,26 @@ export default function AdminCharts({ users, certificates }: Props) {
                 <Tooltip />
                 <Bar dataKey="total" radius={[8, 8, 0, 0]} />
               </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="rounded-2xl border-slate-200 xl:col-span-3">
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Novos usuários por dia
+          </h2>
+
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={usersByDay}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="total" strokeWidth={3} />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
