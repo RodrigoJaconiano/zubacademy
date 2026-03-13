@@ -1,15 +1,24 @@
 import Link from "next/link";
 import Image from "next/image";
 import AppNav from "@/components/layout/app-nav";
+import { createClient } from "@/lib/supabase/server";
+import { isZubaleAdmin } from "@/lib/utils/auth";
 
 type AppHeaderProps = {
   userName?: string | null;
 };
 
-export default function AppHeader({ userName }: AppHeaderProps) {
+export default async function AppHeader({ userName }: AppHeaderProps) {
   const normalizedUserName = userName?.trim();
   const hasUserName =
     Boolean(normalizedUserName) && normalizedUserName !== "Aluno(a)";
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const admin = isZubaleAdmin(user?.email);
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
@@ -44,7 +53,7 @@ export default function AppHeader({ userName }: AppHeaderProps) {
         </Link>
 
         <div className="flex flex-1 items-center justify-end gap-3">
-          <AppNav />
+          <AppNav isAdmin={admin} />
 
           {hasUserName && (
             <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-right sm:block">

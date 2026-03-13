@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { appNavigation } from "@/lib/utils/navigation";
+import { getAppNavigation } from "@/lib/utils/navigation";
 
-export default function AppNav() {
+type AppNavProps = {
+  isAdmin?: boolean;
+};
+
+export default function AppNav({ isAdmin = false }: AppNavProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const appNavigation = getAppNavigation(isAdmin);
 
   const currentValue =
     appNavigation.find((item) => pathname.startsWith(item.href))?.href ??
