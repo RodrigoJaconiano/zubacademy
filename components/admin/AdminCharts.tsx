@@ -9,8 +9,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  LineChart,
-  Line,
 } from "recharts";
 import Card from "@/components/ui/card";
 import type { AdminCertificate, AdminUser } from "./AdminDashboard";
@@ -20,12 +18,22 @@ type Props = {
   certificates: AdminCertificate[];
 };
 
-function formatMonthKey(dateString?: string | null) {
-  if (!dateString) return "Sem data";
+const USER_BAR_COLOR = "#93c5fd"; // azul claro
+const SUCCESS_BAR_COLOR = "#86efac"; // verde claro
 
-  const date = new Date(dateString);
+function getMonthKey(dateString?: string | null) {
+  if (!dateString || dateString.length < 7) return null;
+  return dateString.slice(0, 7);
+}
 
-  if (Number.isNaN(date.getTime())) return "Sem data";
+function getDayKey(dateString?: string | null) {
+  if (!dateString || dateString.length < 10) return null;
+  return dateString.slice(0, 10);
+}
+
+function formatMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
 
   return new Intl.DateTimeFormat("pt-BR", {
     month: "short",
@@ -33,12 +41,9 @@ function formatMonthKey(dateString?: string | null) {
   }).format(date);
 }
 
-function formatDayKey(dateString?: string | null) {
-  if (!dateString) return "Sem data";
-
-  const date = new Date(dateString);
-
-  if (Number.isNaN(date.getTime())) return "Sem data";
+function formatDayLabel(dayKey: string) {
+  const [year, month, day] = dayKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
 
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -46,48 +51,92 @@ function formatDayKey(dateString?: string | null) {
   }).format(date);
 }
 
+function groupUsersByMonth(users: AdminUser[]) {
+  const map = new Map<string, number>();
+
+  users.forEach((user) => {
+    const key = getMonthKey(user.created_at);
+    if (!key) return;
+    map.set(key, (map.get(key) ?? 0) + 1);
+  });
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, total]) => ({
+      key,
+      label: formatMonthLabel(key),
+      total,
+    }));
+}
+
+function groupUsersByDay(users: AdminUser[]) {
+  const map = new Map<string, number>();
+
+  users.forEach((user) => {
+    const key = getDayKey(user.created_at);
+    if (!key) return;
+    map.set(key, (map.get(key) ?? 0) + 1);
+  });
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, total]) => ({
+      key,
+      label: formatDayLabel(key),
+      total,
+    }));
+}
+
+function groupCertificatesByMonth(certificates: AdminCertificate[]) {
+  const map = new Map<string, number>();
+
+  certificates.forEach((certificate) => {
+    const key = getMonthKey(certificate.issued_at);
+    if (!key) return;
+    map.set(key, (map.get(key) ?? 0) + 1);
+  });
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, total]) => ({
+      key,
+      label: formatMonthLabel(key),
+      total,
+    }));
+}
+
+function groupCertificatesByDay(certificates: AdminCertificate[]) {
+  const map = new Map<string, number>();
+
+  certificates.forEach((certificate) => {
+    const key = getDayKey(certificate.issued_at);
+    if (!key) return;
+    map.set(key, (map.get(key) ?? 0) + 1);
+  });
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, total]) => ({
+      key,
+      label: formatDayLabel(key),
+      total,
+    }));
+}
+
 export default function AdminCharts({ users, certificates }: Props) {
-  const usersByMonth = useMemo(() => {
-    const map = new Map<string, number>();
+  const usersByMonth = useMemo(() => groupUsersByMonth(users), [users]);
 
-    users.forEach((user) => {
-      const key = formatMonthKey(user.created_at);
-      map.set(key, (map.get(key) ?? 0) + 1);
-    });
+  const usersByDay = useMemo(() => groupUsersByDay(users), [users]);
 
-    return Array.from(map.entries()).map(([month, total]) => ({
-      month,
-      total,
-    }));
-  }, [users]);
+  const certificatesByMonth = useMemo(
+    () => groupCertificatesByMonth(certificates),
+    [certificates]
+  );
 
-  const usersByDay = useMemo(() => {
-    const map = new Map<string, number>();
-
-    users.forEach((user) => {
-      const key = formatDayKey(user.created_at);
-      map.set(key, (map.get(key) ?? 0) + 1);
-    });
-
-    return Array.from(map.entries()).map(([day, total]) => ({
-      day,
-      total,
-    }));
-  }, [users]);
-
-  const certificatesByMonth = useMemo(() => {
-    const map = new Map<string, number>();
-
-    certificates.forEach((certificate) => {
-      const key = formatMonthKey(certificate.issued_at);
-      map.set(key, (map.get(key) ?? 0) + 1);
-    });
-
-    return Array.from(map.entries()).map(([month, total]) => ({
-      month,
-      total,
-    }));
-  }, [certificates]);
+  const certificatesByDay = useMemo(
+    () => groupCertificatesByDay(certificates),
+    [certificates]
+  );
 
   const progressDistribution = useMemo(() => {
     const ranges = [
@@ -121,10 +170,14 @@ export default function AdminCharts({ users, certificates }: Props) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={usersByMonth}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <XAxis dataKey="label" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="total" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="total"
+                  fill={USER_BAR_COLOR}
+                  radius={[8, 8, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -144,7 +197,11 @@ export default function AdminCharts({ users, certificates }: Props) {
                 <XAxis dataKey="label" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="total" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="total"
+                  fill={SUCCESS_BAR_COLOR}
+                  radius={[8, 8, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -159,34 +216,66 @@ export default function AdminCharts({ users, certificates }: Props) {
 
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={usersByDay}>
+              <BarChart data={usersByDay}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
+                <XAxis dataKey="label" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Line type="monotone" dataKey="total" strokeWidth={3} />
-              </LineChart>
+                <Bar
+                  dataKey="total"
+                  fill={USER_BAR_COLOR}
+                  radius={[8, 8, 0, 0]}
+                />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </Card>
 
       <Card className="rounded-2xl border-slate-200 xl:col-span-3">
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Certificados emitidos por mês
-          </h2>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Certificados emitidos por mês
+            </h2>
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={certificatesByMonth}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="total" strokeWidth={3} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={certificatesByMonth}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar
+                    dataKey="total"
+                    fill={SUCCESS_BAR_COLOR}
+                    radius={[8, 8, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Certificados emitidos por dia
+            </h2>
+
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={certificatesByDay}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar
+                    dataKey="total"
+                    fill={SUCCESS_BAR_COLOR}
+                    radius={[8, 8, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
       </Card>
