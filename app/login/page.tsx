@@ -10,11 +10,16 @@ import Input from "@/components/ui/input";
 import Card from "@/components/ui/card";
 import TextMessage from "@/components/ui/text-message";
 
+type Step = "email" | "otp";
+
 export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
 
+  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
+
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<"default" | "success" | "error">("default");
   const [loading, setLoading] = useState(false);
@@ -24,33 +29,20 @@ export default function LoginPage() {
     async function checkSession() {
       const {
         data: { user },
-        error: userError,
       } = await supabase.auth.getUser();
-
-      if (userError) {
-        console.error("Erro ao verificar sessão:", userError);
-        setCheckingSession(false);
-        return;
-      }
 
       if (!user) {
         setCheckingSession(false);
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("name, phone, cep, city, state, address, number")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (profileError) {
-        console.error("Erro ao buscar perfil no login:", profileError);
-        setCheckingSession(false);
-        return;
-      }
-
-      const profileIncomplete =
+      const incomplete =
         !profile?.name ||
         !profile?.phone ||
         !profile?.cep ||
@@ -59,45 +51,59 @@ export default function LoginPage() {
         !profile?.address ||
         !profile?.number;
 
-      router.replace(profileIncomplete ? "/perfil" : "/dashboard");
+      router.replace(incomplete ? "/perfil" : "/dashboard");
     }
 
     checkSession();
   }, [router, supabase]);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMessage("");
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: "https://zubacademy.vercel.app/auth/confirm?next=/perfil",
-      },
     });
 
     if (error) {
       setStatus("error");
-      setMessage(`Erro: ${error.message}`);
-      console.error(error);
+      setMessage(error.message);
       setLoading(false);
       return;
     }
 
     setStatus("success");
-    setMessage("Verifique seu e-mail para entrar.");
+    setMessage("Enviamos um código de 6 dígitos para seu e-mail.");
+    setStep("otp");
     setLoading(false);
+  }
+
+  async function handleVerifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "email",
+    });
+
+    if (error) {
+      setStatus("error");
+      setMessage("Código inválido ou expirado.");
+      setLoading(false);
+      return;
+    }
+
+    router.replace("/dashboard");
   }
 
   if (checkingSession) {
     return (
       <PageContainer className="flex min-h-screen items-center justify-center py-16">
-        <div className="w-full max-w-md">
-          <Card className="rounded-[28px] p-8">
-            <p className="text-sm text-slate-600">Verificando acesso...</p>
-          </Card>
-        </div>
+        <Card className="p-8">Verificando acesso...</Card>
       </PageContainer>
     );
   }
@@ -105,33 +111,47 @@ export default function LoginPage() {
   return (
     <PageContainer className="flex min-h-screen items-center justify-center py-16">
       <div className="w-full max-w-md">
-        <Card className="rounded-[28px] p-8">
-          <div className="mb-6">
-            <div className="mb-4 inline-flex rounded-2xl bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-              Zubale Academy
-            </div>
+        <Card className="p-8 space-y-6">
+          <h1 className="text-2xl font-bold">Entrar</h1>
 
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-              Entrar
-            </h1>
+          {step === "email" && (
+            <form onSubmit={handleSendCode} className="space-y-4">
+              <Input
+                type="email"
+                placeholder="seuemail@exemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
 
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Digite seu e-mail para receber um link seguro de acesso à plataforma.
-            </p>
-          </div>
+              <Button type="submit" disabled={!email || loading}>
+                {loading ? "Enviando..." : "Enviar código"}
+              </Button>
+            </form>
+          )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <Input
-              type="email"
-              placeholder="seuemail@exemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+          {step === "otp" && (
+            <form onSubmit={handleVerifyCode} className="space-y-4">
+              <Input
+                placeholder="Digite o código de 6 dígitos"
+                value={token}
+                onChange={(e) =>
+                  setToken(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+              />
 
-            <Button type="submit" disabled={loading || !email}>
-              {loading ? "Enviando..." : "Enviar link"}
-            </Button>
-          </form>
+              <Button type="submit" disabled={token.length !== 6 || loading}>
+                {loading ? "Validando..." : "Entrar"}
+              </Button>
+
+              <button
+                type="button"
+                className="text-sm text-blue-600"
+                onClick={() => setStep("email")}
+              >
+                Voltar
+              </button>
+            </form>
+          )}
 
           {message && <TextMessage variant={status}>{message}</TextMessage>}
         </Card>

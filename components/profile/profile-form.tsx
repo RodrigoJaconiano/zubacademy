@@ -46,7 +46,7 @@ export default function ProfileForm({
 
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
-  const [email, setEmail] = useState(initialEmail);
+  const [email] = useState(initialEmail);
   const [cpf, setCpf] = useState(initialCpf);
   const [cep, setCep] = useState(initialCep);
   const [city, setCity] = useState(initialCity);
@@ -120,7 +120,7 @@ export default function ProfileForm({
     }
 
     if (!email.trim()) {
-      return "Preencha o campo E-mail corretamente.";
+      return "Não foi possível identificar o e-mail da conta.";
     }
 
     if (normalizeCpf(cpf).length !== 11) {
@@ -230,7 +230,6 @@ export default function ProfileForm({
       id: userId,
       name: name.trim(),
       phone: phone.trim(),
-      email: email.trim(),
       cpf: normalizeCpf(cpf),
       cep: normalizeCep(cep),
       city: city.trim(),
@@ -324,13 +323,13 @@ export default function ProfileForm({
               id="email"
               type="email"
               value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                clearErrorMessage();
-              }}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              placeholder="Digite seu e-mail"
+              readOnly
+              className="w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-500 outline-none"
+              placeholder="E-mail cadastrado"
             />
+            <p className="mt-2 text-xs text-slate-500">
+              O e-mail da conta não pode ser alterado.
+            </p>
           </div>
 
           <div>
@@ -517,3 +516,4 @@ export default function ProfileForm({
     </>
   );
 }
+
