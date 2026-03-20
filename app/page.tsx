@@ -1,7 +1,19 @@
 import { redirect } from "next/navigation";
 import Hero from "@/components/landing/hero";
 import { createClient } from "@/lib/supabase/server";
-import { getMissingProfileFields } from "@/lib/utils/progress";
+import { getMissingProfileFields, type ProfileData } from "@/lib/utils/progress";
+
+type RawProfileRow = {
+  name?: string | null;
+  phone?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  number?: string | number | null;
+  terms_accepted?: boolean | null;
+};
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -11,16 +23,35 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("name, phone, cep, city, state, address, number")
+      .select(
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+      )
       .eq("id", user.id)
-      .maybeSingle();
+      .maybeSingle<RawProfileRow>();
+
+    const profile: ProfileData | null = rawProfile
+      ? {
+          name: rawProfile.name ?? null,
+          phone: rawProfile.phone ?? null,
+          cpf: rawProfile.cpf ?? null,
+          cep: rawProfile.cep ?? null,
+          city: rawProfile.city ?? null,
+          state: rawProfile.state ?? null,
+          address: rawProfile.address ?? null,
+          number:
+            rawProfile.number === null || rawProfile.number === undefined
+              ? null
+              : String(rawProfile.number),
+        }
+      : null;
 
     const missingProfileFields = getMissingProfileFields(profile);
     const profileIncomplete = missingProfileFields.length > 0;
+    const termsAccepted = Boolean(rawProfile?.terms_accepted);
 
-    redirect(profileIncomplete ? "/perfil" : "/curso");
+    redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
   }
 
   return (

@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  getMissingProfileFields,
+  type ProfileData,
+} from "@/lib/utils/progress";
 
 import PageContainer from "@/components/ui/page-container";
 import Button from "@/components/ui/Button";
@@ -12,6 +16,18 @@ import TextMessage from "@/components/ui/text-message";
 
 type Step = "email" | "otp";
 type MessageStatus = "default" | "success" | "error";
+
+type RawProfileRow = {
+  name?: string | null;
+  phone?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  number?: string | number | null;
+  terms_accepted?: boolean | null;
+};
 
 async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -45,28 +61,43 @@ export default function LoginPage() {
       return;
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: rawProfile, error: profileError } = await supabase
       .from("profiles")
-      .select("name, phone, cep, city, state, address, number")
+      .select(
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+      )
       .eq("id", user.id)
-      .maybeSingle();
+      .maybeSingle<RawProfileRow>();
 
     if (profileError) {
       console.error("Erro ao buscar perfil no login:", profileError);
+      setCheckingSession(false);
       router.replace("/dashboard");
       return;
     }
 
-    const incomplete =
-      !profile?.name ||
-      !profile?.phone ||
-      !profile?.cep ||
-      !profile?.city ||
-      !profile?.state ||
-      !profile?.address ||
-      !profile?.number;
+    const profile: ProfileData | null = rawProfile
+      ? {
+          name: rawProfile.name ?? null,
+          phone: rawProfile.phone ?? null,
+          cpf: rawProfile.cpf ?? null,
+          cep: rawProfile.cep ?? null,
+          city: rawProfile.city ?? null,
+          state: rawProfile.state ?? null,
+          address: rawProfile.address ?? null,
+          number:
+            rawProfile.number === null || rawProfile.number === undefined
+              ? null
+              : String(rawProfile.number),
+        }
+      : null;
 
-    router.replace(incomplete ? "/perfil" : "/dashboard");
+    const missingProfileFields = getMissingProfileFields(profile);
+    const profileIncomplete = missingProfileFields.length > 0;
+    const termsAccepted = Boolean(rawProfile?.terms_accepted);
+
+    setCheckingSession(false);
+    router.replace(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
   }
 
   async function waitForSession(maxAttempts = 12, delayMs = 250) {
