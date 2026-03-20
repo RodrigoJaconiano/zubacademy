@@ -28,9 +28,9 @@ type InitialAttempt = {
 } | null;
 
 type QuizClientProps = {
-  questions: QuizQuestion[];
-  initialAttempt: InitialAttempt;
-  certificateIssued: boolean;
+  questions?: QuizQuestion[];
+  initialAttempt?: InitialAttempt;
+  certificateIssued?: boolean;
 };
 
 const PASSING_PERCENTAGE = 70;
@@ -64,22 +64,25 @@ function getInitialResult(
 }
 
 export default function QuizClient({
-  questions,
-  initialAttempt,
-  certificateIssued,
+  questions = [],
+  initialAttempt = null,
+  certificateIssued = false,
 }: QuizClientProps) {
   const router = useRouter();
   const supabase = createClient();
+
+  const safeQuestions = Array.isArray(questions) ? questions : [];
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<QuizResult | null>(
-    getInitialResult(questions, initialAttempt)
+    getInitialResult(safeQuestions, initialAttempt)
   );
 
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
-  const allAnswered = answeredCount === questions.length;
+  const allAnswered =
+    safeQuestions.length > 0 && answeredCount === safeQuestions.length;
 
   const alreadyCompleted = Boolean(initialAttempt?.completed_at);
   const alreadyPassed = Boolean(initialAttempt?.passed);
@@ -93,12 +96,12 @@ export default function QuizClient({
   }
 
   function calculateResult(): QuizResult {
-    const correctAnswers = questions.reduce((total, question) => {
+    const correctAnswers = safeQuestions.reduce((total, question) => {
       const selectedAnswer = answers[question.id];
       return selectedAnswer === question.correctAnswer ? total + 1 : total;
     }, 0);
 
-    const totalQuestions = questions.length;
+    const totalQuestions = safeQuestions.length;
     const percentage =
       totalQuestions > 0
         ? Math.round((correctAnswers / totalQuestions) * 100)
@@ -204,6 +207,20 @@ export default function QuizClient({
     setSubmitError(null);
   }
 
+  if (safeQuestions.length === 0) {
+    return (
+      <Card>
+        <p className="text-sm font-medium text-amber-600">Quiz final</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+          Nenhuma pergunta encontrada
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          O quiz não está disponível no momento.
+        </p>
+      </Card>
+    );
+  }
+
   if (alreadyCompleted && alreadyPassed) {
     return (
       <Card>
@@ -232,7 +249,9 @@ export default function QuizClient({
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={() => router.push(alreadyHasCertificate ? "/certificado" : "/dashboard")}
+            onClick={() =>
+              router.push(alreadyHasCertificate ? "/certificado" : "/dashboard")
+            }
             className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
           >
             {alreadyHasCertificate ? "Ver certificado" : "Ir para o painel"}
@@ -321,14 +340,14 @@ export default function QuizClient({
         <p className="text-sm text-slate-600">
           Progresso do quiz:{" "}
           <span className="font-semibold text-slate-900">
-            {answeredCount}/{questions.length}
+            {answeredCount}/{safeQuestions.length}
           </span>{" "}
           respondidas
         </p>
       </div>
 
       <div className="mt-6 space-y-6">
-        {questions.map((question, index) => {
+        {safeQuestions.map((question, index) => {
           const selectedAnswer = answers[question.id];
 
           return (
