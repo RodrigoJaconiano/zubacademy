@@ -11,6 +11,11 @@ import Card from "@/components/ui/card";
 import TextMessage from "@/components/ui/text-message";
 
 type Step = "email" | "otp";
+type MessageStatus = "default" | "success" | "error";
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default function LoginPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -21,7 +26,7 @@ export default function LoginPage() {
   const [token, setToken] = useState("");
 
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<"default" | "success" | "error">("default");
+  const [status, setStatus] = useState<MessageStatus>("default");
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
@@ -29,36 +34,104 @@ export default function LoginPage() {
 
   const otpValues = Array.from({ length: 6 }, (_, index) => token[index] ?? "");
 
+  async function redirectAuthenticatedUser() {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setCheckingSession(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("name, phone, cep, city, state, address, number")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Erro ao buscar perfil no login:", profileError);
+      router.replace("/dashboard");
+      return;
+    }
+
+    const incomplete =
+      !profile?.name ||
+      !profile?.phone ||
+      !profile?.cep ||
+      !profile?.city ||
+      !profile?.state ||
+      !profile?.address ||
+      !profile?.number;
+
+    router.replace(incomplete ? "/perfil" : "/dashboard");
+  }
+
+  async function waitForSession(maxAttempts = 12, delayMs = 250) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        return session;
+      }
+
+      await sleep(delayMs);
+    }
+
+    return null;
+  }
+
   useEffect(() => {
+    let isMounted = true;
+
     async function checkSession() {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (!user) {
+      if (!isMounted) return;
+
+      if (!session?.user) {
         setCheckingSession(false);
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, phone, cep, city, state, address, number")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const incomplete =
-        !profile?.name ||
-        !profile?.phone ||
-        !profile?.cep ||
-        !profile?.city ||
-        !profile?.state ||
-        !profile?.address ||
-        !profile?.number;
-
-      router.replace(incomplete ? "/perfil" : "/dashboard");
+      await redirectAuthenticatedUser();
     }
 
     checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+
+      if (
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "INITIAL_SESSION"
+      ) {
+        if (session?.user) {
+          router.refresh();
+          void redirectAuthenticatedUser();
+        } else {
+          setCheckingSession(false);
+        }
+      }
+
+      if (event === "SIGNED_OUT") {
+        setCheckingSession(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   useEffect(() => {
@@ -125,6 +198,7 @@ export default function LoginPage() {
       }
 
       if (index > 0) {
+        event.preventDefault();
         focusOtpIndex(index - 1);
       }
     }
@@ -143,7 +217,10 @@ export default function LoginPage() {
   function handleOtpPaste(event: React.ClipboardEvent<HTMLInputElement>) {
     event.preventDefault();
 
-    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const pasted = event.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
 
     if (!pasted) return;
 
@@ -157,6 +234,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage("");
+    setStatus("default");
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -181,8 +259,16 @@ export default function LoginPage() {
 
   async function handleVerifyCode(e: React.FormEvent) {
     e.preventDefault();
+
+    if (token.length !== 6) {
+      setStatus("error");
+      setMessage("Digite os 6 dígitos do código.");
+      return;
+    }
+
     setLoading(true);
     setMessage("");
+    setStatus("default");
 
     const { error } = await supabase.auth.verifyOtp({
       email,
@@ -197,10 +283,28 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace("/dashboard");
+    const session = await waitForSession();
+
+    if (!session?.user) {
+      setStatus("error");
+      setMessage(
+        "O código foi validado, mas a sessão não ficou pronta a tempo. Atualize a página e tente novamente."
+      );
+      setLoading(false);
+      return;
+    }
+
+    setStatus("success");
+    setMessage("Código validado com sucesso. Redirecionando...");
+
+    await redirectAuthenticatedUser();
+
+    setLoading(false);
   }
 
   function handleBackToEmail() {
+    if (loading) return;
+
     setStep("email");
     setToken("");
     setMessage("");
@@ -273,6 +377,7 @@ export default function LoginPage() {
                 type="button"
                 className="text-sm text-blue-600"
                 onClick={handleBackToEmail}
+                disabled={loading}
               >
                 Voltar
               </button>
