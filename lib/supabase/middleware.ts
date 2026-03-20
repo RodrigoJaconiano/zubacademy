@@ -1,6 +1,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const PROTECTED_ROUTES = [
+  "/dashboard",
+  "/perfil",
+  "/curso",
+  "/quiz",
+  "/certificado",
+  "/admin",
+];
+
+function isProtectedRoute(pathname: string) {
+  return PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request,
@@ -31,7 +44,21 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getUser();
+  const pathname = request.nextUrl.pathname;
+
+  if (!isProtectedRoute(pathname)) {
+    return response;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
 
   return response;
 }

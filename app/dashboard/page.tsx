@@ -42,6 +42,10 @@ type RawProfileRow = {
   terms_accepted?: boolean | null;
 };
 
+type LessonProgressRow = {
+  id: string;
+};
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -50,24 +54,7 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <PageContainer>
-        <Card>
-          <SectionHeading
-            eyebrow="Painel"
-            title="Área do aluno"
-            description="Você precisa estar autenticado para acessar seu progresso."
-          />
-
-          <Link
-            href="/login"
-            className="inline-flex items-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white transition hover:bg-blue-700"
-          >
-            Ir para o login
-          </Link>
-        </Card>
-      </PageContainer>
-    );
+    redirect("/login");
   }
 
   const [
@@ -78,9 +65,10 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("lesson_progress")
-      .select("*")
+      .select("id")
       .eq("user_id", user.id)
-      .eq("completed", true),
+      .eq("completed", true)
+      .returns<LessonProgressRow[]>(),
 
     supabase
       .from("profiles")
@@ -88,7 +76,7 @@ export default async function DashboardPage() {
         "name, phone, cpf, cep, city, state, address, number, terms_accepted"
       )
       .eq("id", user.id)
-      .maybeSingle(),
+      .maybeSingle<RawProfileRow>(),
 
     supabase
       .from("certificates")
@@ -129,7 +117,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const profileRow = rawProfile as RawProfileRow | null;
+  const profileRow = rawProfile ?? null;
 
   const profile: ProfileData | null = profileRow
     ? {
@@ -200,7 +188,9 @@ export default async function DashboardPage() {
             </div>
 
             <div className="flex min-h-[108px] flex-col justify-between rounded-2xl border border-blue-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-sm leading-5 text-slate-500">Aulas concluídas</p>
+              <p className="text-sm leading-5 text-slate-500">
+                Aulas concluídas
+              </p>
               <p className="mt-3 text-2xl font-bold leading-none text-slate-900">
                 {completedLessons}/{totalLessons}
               </p>
@@ -301,8 +291,8 @@ export default async function DashboardPage() {
                   {quizCompleted
                     ? "Quiz concluído"
                     : dashboardState.quizUnlocked
-                    ? "Ir para o quiz final"
-                    : "Quiz bloqueado"}
+                      ? "Ir para o quiz final"
+                      : "Quiz bloqueado"}
                 </Link>
               </div>
             )}
