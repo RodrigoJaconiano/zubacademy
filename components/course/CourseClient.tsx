@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import YouTube, { YouTubeEvent } from "react-youtube";
+import type { YouTubeEvent } from "react-youtube";
 import { Course, LessonProgressRow } from "@/types";
 
 import Card from "@/components/ui/card";
@@ -12,6 +13,10 @@ import ProgressBar from "@/components/ui/progress-bar";
 import SectionHeading from "@/components/ui/section-heading";
 import TextMessage from "@/components/ui/text-message";
 import CourseCompletionModal from "@/components/course/CourseCompletionModal";
+
+const YouTube = dynamic(() => import("react-youtube"), {
+  ssr: false,
+});
 
 type CourseClientProps = {
   course: Course;
@@ -34,8 +39,13 @@ export default function CourseClient({
     "default" | "success" | "error"
   >("default");
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   const previousCompletedCountRef = useRef(completedIds.length);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const progressPercentage = useMemo(() => {
     if (course.lessons.length === 0) return 0;
@@ -203,22 +213,32 @@ export default function CourseClient({
                   </div>
 
                   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
-                    <YouTube
-                      key={`${lesson.id}-${lesson.videoId}`}
-                      videoId={lesson.videoId}
-                      opts={{
-                        width: "100%",
-                        height: "420",
-                        playerVars: {
-                          rel: 0,
-                        },
-                      }}
-                      className="w-full"
-                      iframeClassName="aspect-video h-auto w-full"
-                      onEnd={(_event: YouTubeEvent<number>) =>
-                        handleVideoEnd(lesson.id)
-                      }
-                    />
+                    {isMounted ? (
+                      <YouTube
+                        key={`${lesson.id}-${lesson.videoId}`}
+                        videoId={lesson.videoId}
+                        opts={{
+                          width: "100%",
+                          height: "420",
+                          playerVars: {
+                            rel: 0,
+                            modestbranding: 1,
+                          },
+                        }}
+                        className="w-full"
+                        iframeClassName="aspect-video h-auto w-full"
+                        onEnd={(_event: YouTubeEvent<number>) =>
+                          handleVideoEnd(lesson.id)
+                        }
+                        onError={(event: YouTubeEvent<number>) => {
+                          console.log("YouTube error:", lesson.videoId, event.data);
+                        }}
+                      />
+                    ) : (
+                      <div className="flex aspect-video items-center justify-center text-sm text-slate-400">
+                        Carregando vídeo...
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
