@@ -11,6 +11,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const COURSE_SLUG = "treinamento-zubale";
+
 type RawProfileRow = {
   name?: string | null;
   phone?: string | null;
@@ -21,6 +23,18 @@ type RawProfileRow = {
   address?: string | null;
   number?: string | number | null;
   terms_accepted?: boolean | null;
+};
+
+type QuizAttemptRow = {
+  id: string;
+  score?: number | null;
+  passed?: boolean | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+};
+
+type CertificateRow = {
+  id: string;
 };
 
 export default async function QuizPage() {
@@ -44,25 +58,49 @@ export default async function QuizPage() {
     );
   }
 
-  const [{ data: progressData, error: progressError }, { data: rawProfile, error: profileError }] =
-    await Promise.all([
-      supabase
-        .from("lesson_progress")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("completed", true),
+  const [
+    { data: progressData, error: progressError },
+    { data: rawProfile, error: profileError },
+    { data: latestAttempt, error: attemptError },
+    { data: certificate, error: certificateError },
+  ] = await Promise.all([
+    supabase
+      .from("lesson_progress")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("completed", true),
 
-      supabase
-        .from("profiles")
-        .select(
-          "name, phone, cpf, cep, city, state, address, number, terms_accepted"
-        )
-        .eq("id", user.id)
-        .maybeSingle(),
-    ]);
+    supabase
+      .from("profiles")
+      .select(
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
 
-  if (progressError || profileError) {
-    console.error("Erro ao carregar quiz:", progressError || profileError);
+    supabase
+      .from("quiz_attempts")
+      .select("id, score, passed, completed_at, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<QuizAttemptRow>(),
+
+    supabase
+      .from("certificates")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("course_slug", COURSE_SLUG)
+      .maybeSingle<CertificateRow>(),
+  ]);
+
+  if (progressError || profileError || attemptError || certificateError) {
+    console.error("Erro ao carregar quiz:", {
+      progressError,
+      profileError,
+      attemptError,
+      certificateError,
+    });
 
     return (
       <PageContainer>
@@ -130,7 +168,11 @@ export default async function QuizPage() {
 
   return (
     <PageContainer>
-      <QuizClient questions={quizQuestions} />
+      <QuizClient
+        questions={quizQuestions}
+        initialAttempt={latestAttempt ?? null}
+        certificateIssued={Boolean(certificate?.id)}
+      />
     </PageContainer>
   );
 }

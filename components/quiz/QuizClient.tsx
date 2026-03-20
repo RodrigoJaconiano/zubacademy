@@ -12,15 +12,25 @@ type QuizQuestion = {
   correctAnswer: string;
 };
 
-type QuizClientProps = {
-  questions: QuizQuestion[];
-};
-
 type QuizResult = {
   score: number;
   total: number;
   percentage: number;
   passed: boolean;
+};
+
+type InitialAttempt = {
+  id: string;
+  score?: number | null;
+  passed?: boolean | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+} | null;
+
+type QuizClientProps = {
+  questions: QuizQuestion[];
+  initialAttempt: InitialAttempt;
+  certificateIssued: boolean;
 };
 
 const PASSING_PERCENTAGE = 70;
@@ -33,17 +43,47 @@ function generateCertificateCode(userId: string, courseSlug: string) {
   return `${slugFragment}-${userFragment}`;
 }
 
-export default function QuizClient({ questions }: QuizClientProps) {
+function getInitialResult(
+  questions: QuizQuestion[],
+  initialAttempt: InitialAttempt
+): QuizResult | null {
+  if (!initialAttempt?.completed_at) {
+    return null;
+  }
+
+  const percentage = initialAttempt.score ?? 0;
+  const total = questions.length;
+  const score = Math.round((percentage / 100) * total);
+
+  return {
+    score,
+    total,
+    percentage,
+    passed: Boolean(initialAttempt.passed),
+  };
+}
+
+export default function QuizClient({
+  questions,
+  initialAttempt,
+  certificateIssued,
+}: QuizClientProps) {
   const router = useRouter();
   const supabase = createClient();
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<QuizResult | null>(null);
+  const [result, setResult] = useState<QuizResult | null>(
+    getInitialResult(questions, initialAttempt)
+  );
 
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
   const allAnswered = answeredCount === questions.length;
+
+  const alreadyCompleted = Boolean(initialAttempt?.completed_at);
+  const alreadyPassed = Boolean(initialAttempt?.passed);
+  const alreadyHasCertificate = certificateIssued;
 
   function handleSelectAnswer(questionId: string, option: string) {
     setAnswers((prev) => ({
@@ -97,14 +137,12 @@ export default function QuizClient({ questions }: QuizClientProps) {
 
       const completedAt = new Date().toISOString();
 
-      const { error: attemptError } = await supabase
-        .from("quiz_attempts")
-        .insert({
-          user_id: user.id,
-          score: quizResult.percentage,
-          passed: quizResult.passed,
-          completed_at: completedAt,
-        });
+      const { error: attemptError } = await supabase.from("quiz_attempts").insert({
+        user_id: user.id,
+        score: quizResult.percentage,
+        passed: quizResult.passed,
+        completed_at: completedAt,
+      });
 
       if (attemptError) {
         throw new Error("Não foi possível salvar sua tentativa no quiz.");
@@ -164,6 +202,52 @@ export default function QuizClient({ questions }: QuizClientProps) {
     setAnswers({});
     setResult(null);
     setSubmitError(null);
+  }
+
+  if (alreadyCompleted && alreadyPassed) {
+    return (
+      <Card>
+        <p className="text-sm font-medium text-emerald-600">Quiz final</p>
+
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+          Quiz já concluído com sucesso
+        </h1>
+
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Você já concluiu esta avaliação e foi aprovado com{" "}
+          <span className="font-semibold text-slate-900">
+            {result?.percentage ?? initialAttempt?.score ?? 0}%
+          </span>
+          .
+        </p>
+
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm text-emerald-700">
+            {alreadyHasCertificate
+              ? "Seu certificado já está disponível."
+              : "Sua aprovação já foi registrada no sistema."}
+          </p>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => router.push(alreadyHasCertificate ? "/certificado" : "/dashboard")}
+            className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
+          >
+            {alreadyHasCertificate ? "Ver certificado" : "Ir para o painel"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/curso")}
+            className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Voltar para o curso
+          </button>
+        </div>
+      </Card>
+    );
   }
 
   if (result && !result.passed) {
