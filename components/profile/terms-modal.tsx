@@ -25,7 +25,10 @@ export default function TermsModal({ open, onClose }: TermsModalProps) {
             Ao acessar e utilizar esta plataforma, o usuário declara estar ciente
             e de acordo com as regras de uso, navegação, acompanhamento de
             progresso e emissão de certificado vinculadas ao ambiente de
-            treinamento.
+            treinamento.{" "}
+            <span className="text-red-600 font-semibold">
+              A liberação do aplicativo depende da disponibilidade de vagas de freelancers na loja.
+            </span>
           </p>
 
           <p>
