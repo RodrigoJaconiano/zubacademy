@@ -55,9 +55,10 @@ export default function ProfileForm({
   const [number, setNumber] = useState(initialNumber);
 
   const [termsAccepted, setTermsAccepted] = useState(initialTermsAccepted);
-  const [termsAcceptedAt] = useState(initialTermsAcceptedAt);
+  const [termsAcceptedAt, setTermsAcceptedAt] = useState(initialTermsAcceptedAt);
   const [hasOpenedTerms, setHasOpenedTerms] = useState(initialTermsAccepted);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [isAcceptingTerms, setIsAcceptingTerms] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
@@ -206,9 +207,49 @@ export default function ProfileForm({
   }
 
   function handleOpenTerms() {
-    setHasOpenedTerms(true);
     setIsTermsModalOpen(true);
     clearErrorMessage();
+  }
+
+  async function handleAcceptTerms() {
+    setIsAcceptingTerms(true);
+    setMessage("");
+    setMessageVariant("default");
+
+    try {
+      const acceptedAt = new Date().toISOString();
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          terms_accepted: true,
+          terms_accepted_at: acceptedAt,
+          terms_version: TERMS_VERSION,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+
+      if (error) {
+        throw new Error("Não foi possível registrar o aceite dos termos.");
+      }
+
+      setTermsAccepted(true);
+      setTermsAcceptedAt(acceptedAt);
+      setHasOpenedTerms(true);
+      setIsTermsModalOpen(false);
+      setMessageVariant("success");
+      setMessage("Termos aceitos com sucesso.");
+    } catch (error) {
+      console.error("Erro ao aceitar termos:", error);
+      setMessageVariant("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar o aceite dos termos."
+      );
+    } finally {
+      setIsAcceptingTerms(false);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -467,7 +508,7 @@ export default function ProfileForm({
                 onClick={handleOpenTerms}
                 className="inline-flex w-fit items-center justify-center rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
               >
-                Ler termos de utilização
+                {termsAccepted ? "Revisar termos de utilização" : "Ler termos de utilização"}
               </button>
 
               <label className="flex items-start gap-3 text-sm text-slate-700">
@@ -475,27 +516,36 @@ export default function ProfileForm({
                   type="checkbox"
                   className="mt-1"
                   checked={termsAccepted}
-                  disabled={!hasOpenedTerms}
-                  onChange={(event) => {
-                    setTermsAccepted(event.target.checked);
-                    clearErrorMessage();
-                  }}
+                  readOnly
+                  disabled
                 />
                 <span>
-                  Li e concordo com os termos de utilização da plataforma.
+                  {termsAccepted
+                    ? "Termos aceitos com sucesso."
+                    : "O aceite será liberado ao final da leitura completa dos termos."}
                 </span>
               </label>
 
-              {!hasOpenedTerms && !termsAccepted ? (
+              {!termsAccepted ? (
                 <p className="text-xs text-amber-700">
-                  Você precisa abrir e ler os termos antes de marcar o aceite.
+                  Você precisa rolar até o final do modal e clicar em aceitar para continuar.
+                </p>
+              ) : null}
+
+              {termsAcceptedAt ? (
+                <p className="text-xs text-slate-500">
+                  Aceite registrado em:{" "}
+                  {new Date(termsAcceptedAt).toLocaleString("pt-BR")}
                 </p>
               ) : null}
             </div>
           </div>
 
           <div className="pt-2">
-            <Button type="submit" disabled={isSaving || isFetchingCep}>
+            <Button
+              type="submit"
+              disabled={isSaving || isFetchingCep || isAcceptingTerms}
+            >
               {isSaving ? "Salvando..." : "Salvar alterações"}
             </Button>
           </div>
@@ -508,12 +558,10 @@ export default function ProfileForm({
 
       <TermsModal
         open={isTermsModalOpen}
-        onClose={() => {
-          setHasOpenedTerms(true);
-          setIsTermsModalOpen(false);
-        }}
+        loading={isAcceptingTerms}
+        onClose={() => setIsTermsModalOpen(false)}
+        onAccept={handleAcceptTerms}
       />
     </>
   );
 }
-

@@ -1,11 +1,63 @@
 "use client";
 
+import { useRef, useState } from "react";
+
 type TermsModalProps = {
   open: boolean;
-  onClose: () => void;
+  onAccept: () => void;
+  onClose?: () => void;
+  loading?: boolean;
 };
 
-export default function TermsModal({ open, onClose }: TermsModalProps) {
+export default function TermsModal({
+  open,
+  onAccept,
+  onClose,
+  loading = false,
+}: TermsModalProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [hasReachedEnd, setHasReachedEnd] = useState(false);
+
+  function checkScrollPosition() {
+    const element = scrollRef.current;
+    if (!element) return;
+
+    const threshold = 12;
+    const contentFitsWithoutScroll =
+      element.scrollHeight <= element.clientHeight + 8;
+
+    const reachedEnd =
+      element.scrollTop + element.clientHeight >=
+      element.scrollHeight - threshold;
+
+    setHasReachedEnd(contentFitsWithoutScroll || reachedEnd);
+  }
+
+  function handleOpenAutoCheck(node: HTMLDivElement | null) {
+    scrollRef.current = node;
+
+    if (!node || !open) return;
+
+    requestAnimationFrame(() => {
+      const contentFitsWithoutScroll =
+        node.scrollHeight <= node.clientHeight + 8;
+
+      if (contentFitsWithoutScroll) {
+        setHasReachedEnd(true);
+      }
+    });
+  }
+
+  function handleClose() {
+    setHasReachedEnd(false);
+    onClose?.();
+  }
+
+  function handleAcceptClick() {
+    onAccept();
+    setHasReachedEnd(false);
+  }
+
   if (!open) return null;
 
   return (
@@ -20,14 +72,19 @@ export default function TermsModal({ open, onClose }: TermsModalProps) {
           </p>
         </div>
 
-        <div className="max-h-[55vh] space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700">
+        <div
+          ref={handleOpenAutoCheck}
+          onScroll={checkScrollPosition}
+          className="max-h-[55vh] space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700"
+        >
           <p>
             Ao acessar e utilizar esta plataforma, o usuário declara estar ciente
             e de acordo com as regras de uso, navegação, acompanhamento de
             progresso e emissão de certificado vinculadas ao ambiente de
-            treinamento.{" "}
-            <span className="text-red-600 font-semibold">
-              A liberação do aplicativo depende da disponibilidade de vagas de freelancers na loja.
+            treinamento.
+            <span className="mt-2 block font-semibold text-red-600">
+              A liberação do aplicativo da pessoa depende da disponibilidade de
+              vagas de freelancers na loja.
             </span>
           </p>
 
@@ -64,14 +121,37 @@ export default function TermsModal({ open, onClose }: TermsModalProps) {
           </p>
         </div>
 
-        <div className="flex justify-end border-t border-slate-200 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            Fechar e continuar
-          </button>
+        <div className="border-t border-slate-200 px-6 py-4">
+          {!hasReachedEnd ? (
+            <p className="mb-3 text-sm text-amber-700">
+              Role até o final dos termos para liberar o aceite.
+            </p>
+          ) : (
+            <p className="mb-3 text-sm text-emerald-700">
+              Leitura concluída. Você já pode aceitar os termos.
+            </p>
+          )}
+
+          <div className="flex justify-end gap-3">
+            {onClose ? (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Fechar
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={handleAcceptClick}
+              disabled={!hasReachedEnd || loading}
+              className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Registrando aceite..." : "Li e aceito os termos"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
