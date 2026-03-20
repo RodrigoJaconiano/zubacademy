@@ -8,8 +8,8 @@ export const courseData: Course = {
   lessons: [
     {
       id: "aula-1",
-      title: "Boas-vindas",
-      description: "Introdução ao treinamento e visão geral da operação.",
+      title: "Boas-vindas Zubalero!!",
+      description: "Introdução e visão geral da operação.",
       videoId: "wuRYEHFO2os",
       order: 1,
     },
