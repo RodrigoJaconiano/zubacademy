@@ -10,7 +10,7 @@ export const courseData: Course = {
       id: "aula-1",
       title: "Boas-vindas",
       description: "Introdução ao treinamento e visão geral da operação.",
-      videoId: "dQw4w9WgXcQ",
+      videoId: "wuRYEHFO2os",
       order: 1,
     },
     {
@@ -23,9 +23,26 @@ export const courseData: Course = {
     {
       id: "aula-3",
       title: "Qualidade e conferência",
-      description: "Boas práticas para evitar erros e manter o padrão da operação.",
+      description:
+        "Boas práticas para evitar erros e manter o padrão da operação.",
       videoId: "dQw4w9WgXcQ",
       order: 3,
+    },
+    {
+      id: "aula-4",
+      title: "Organização da estação de trabalho",
+      description:
+        "Como manter o ambiente organizado para ganhar produtividade e evitar falhas.",
+      videoId: "dQw4w9WgXcQ",
+      order: 4,
+    },
+    {
+      id: "aula-5",
+      title: "Finalização do pedido",
+      description:
+        "Etapas finais de conferência antes de concluir o atendimento.",
+      videoId: "dQw4w9WgXcQ",
+      order: 5,
     },
   ],
 };
@@ -52,5 +69,38 @@ export const quizQuestions: QuizQuestion[] = [
       "Trocar produtos semelhantes",
     ],
     correctAnswer: "Realizar checagem dos itens",
+  },
+  {
+    id: "q3",
+    question: "O que ajuda a evitar erros na separação?",
+    options: [
+      "Fazer sem atenção",
+      "Conferir os itens com cuidado",
+      "Pular etapas",
+      "Misturar pedidos",
+    ],
+    correctAnswer: "Conferir os itens com cuidado",
+  },
+  {
+    id: "q4",
+    question: "Qual prática contribui para manter a qualidade da operação?",
+    options: [
+      "Misturar itens de pedidos diferentes",
+      "Seguir o processo com atenção",
+      "Ignorar a conferência final",
+      "Separar sem validar quantidades",
+    ],
+    correctAnswer: "Seguir o processo com atenção",
+  },
+  {
+    id: "q5",
+    question: "Durante a conferência, o operador deve:",
+    options: [
+      "Aceitar qualquer item parecido",
+      "Comparar os itens com atenção",
+      "Pular a validação de quantidade",
+      "Finalizar rapidamente sem revisar",
+    ],
+    correctAnswer: "Comparar os itens com atenção",
   },
 ];

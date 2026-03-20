@@ -1,274 +1,268 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import YouTube, { YouTubeEvent } from "react-youtube";
-import { Course, LessonProgressRow } from "@/types";
+import { useMemo, useState } from "react";
 
 import Card from "@/components/ui/card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/badge";
-import ProgressBar from "@/components/ui/progress-bar";
 import SectionHeading from "@/components/ui/section-heading";
 import TextMessage from "@/components/ui/text-message";
-import CourseCompletionModal from "@/components/course/CourseCompletionModal";
 
-type CourseClientProps = {
-  course: Course;
-  initialProgress: LessonProgressRow[];
+import { QuizQuestion } from "@/types";
+
+type QuizClientProps = {
+  questions: QuizQuestion[];
+  passingScore?: number;
 };
 
-export default function CourseClient({
-  course,
-  initialProgress,
-}: CourseClientProps) {
-  const [completedIds, setCompletedIds] = useState<string[]>(
-    initialProgress
-      .filter((item) => item.completed)
-      .map((item) => item.lesson_id)
-  );
-  const [watchedIds, setWatchedIds] = useState<string[]>([]);
-  const [loadingLessonId, setLoadingLessonId] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-  const [messageVariant, setMessageVariant] = useState<
-    "default" | "success" | "error"
-  >("default");
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
+type QuizQuestionWithShuffledOptions = QuizQuestion & {
+  shuffledOptions: string[];
+};
 
-  const previousCompletedCountRef = useRef(completedIds.length);
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
 
-  const progressPercentage = useMemo(() => {
-    if (course.lessons.length === 0) return 0;
-    return Math.round((completedIds.length / course.lessons.length) * 100);
-  }, [completedIds, course.lessons.length]);
-
-  const isCourseCompleted =
-    course.lessons.length > 0 &&
-    completedIds.length === course.lessons.length;
-
-  useEffect(() => {
-    const previousCompletedCount = previousCompletedCountRef.current;
-    const hasJustCompletedCourse =
-      completedIds.length === course.lessons.length &&
-      previousCompletedCount < course.lessons.length;
-
-    if (hasJustCompletedCourse) {
-      setShowCompletionModal(true);
-    }
-
-    previousCompletedCountRef.current = completedIds.length;
-  }, [completedIds.length, course.lessons.length]);
-
-  function handleVideoEnd(lessonId: string) {
-    setWatchedIds((prev) => {
-      if (prev.includes(lessonId)) return prev;
-      return [...prev, lessonId];
-    });
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
 
-  async function handleCompleteLesson(lessonId: string) {
-    setLoadingLessonId(lessonId);
-    setMessage("");
+  return shuffled;
+}
 
-    try {
-      const response = await fetch("/api/progress", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ lessonId }),
-      });
+export default function QuizClient({
+  questions,
+  passingScore = 70,
+}: QuizClientProps) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
 
-      const data = await response.json();
+  const randomizedQuestions = useMemo<QuizQuestionWithShuffledOptions[]>(() => {
+    return questions.map((question) => ({
+      ...question,
+      shuffledOptions: shuffleArray(question.options),
+    }));
+  }, [questions]);
 
-      if (!response.ok) {
-        setMessageVariant("error");
-        setMessage(data.error || "Erro ao salvar progresso.");
-        return;
-      }
+  const totalQuestions = randomizedQuestions.length;
+  const answeredCount = Object.keys(answers).length;
 
-      let didCompleteCourseNow = false;
+  const allAnswered =
+    totalQuestions > 0 &&
+    randomizedQuestions.every((question) => Boolean(answers[question.id]));
 
-      setCompletedIds((prev) => {
-        if (prev.includes(lessonId)) return prev;
+  const score = useMemo(() => {
+    return randomizedQuestions.reduce((total, question) => {
+      return answers[question.id] === question.correctAnswer ? total + 1 : total;
+    }, 0);
+  }, [answers, randomizedQuestions]);
 
-        const updated = [...prev, lessonId];
+  const percentage =
+    totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
 
-        if (updated.length === course.lessons.length) {
-          didCompleteCourseNow = true;
-        }
+  const passed = percentage >= passingScore;
 
-        return updated;
-      });
+  function handleSelect(questionId: string, option: string) {
+    if (submitted) return;
 
-      setMessageVariant("success");
-      setMessage(
-        didCompleteCourseNow
-          ? "Parabéns! Você concluiu o curso. O quiz final já está liberado."
-          : "Progresso salvo com sucesso."
-      );
-    } catch {
-      setMessageVariant("error");
-      setMessage("Erro de conexão ao salvar progresso.");
-    } finally {
-      setLoadingLessonId(null);
-    }
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: option,
+    }));
+  }
+
+  function handleSubmit() {
+    if (!allAnswered) return;
+    setSubmitted(true);
+  }
+
+  function handleRetry() {
+    setAnswers({});
+    setSubmitted(false);
   }
 
   return (
-    <>
-      <CourseCompletionModal
-        isOpen={showCompletionModal}
-        onClose={() => setShowCompletionModal(false)}
+    <div className="space-y-8">
+      <SectionHeading
+        eyebrow="Avaliação final"
+        title="Quiz do treinamento"
+        description="Responda às perguntas abaixo para concluir a etapa final. As alternativas são embaralhadas a cada carregamento."
       />
 
-      <div className="space-y-8">
-        <SectionHeading
-          eyebrow="Treinamento"
-          title={course.title}
-          description={course.description}
-        />
+      <Card className="rounded-[28px] border-blue-100 bg-blue-50/70">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-blue-700">Progresso do quiz</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-900">
+              {answeredCount}/{totalQuestions} perguntas respondidas
+            </h2>
+          </div>
 
-        <Card className="rounded-[28px] border-blue-100 bg-blue-50/70">
+          <Badge variant={answeredCount === totalQuestions ? "success" : "info"}>
+            {totalQuestions === 0
+              ? "Sem perguntas"
+              : `${Math.round((answeredCount / totalQuestions) * 100)}% preenchido`}
+          </Badge>
+        </div>
+      </Card>
+
+      <div className="grid gap-6">
+        {randomizedQuestions.map((question, index) => {
+          const selectedAnswer = answers[question.id];
+          const isCorrect = selectedAnswer === question.correctAnswer;
+
+          return (
+            <Card key={question.id} className="rounded-[28px] p-6">
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-700">
+                      Pergunta {index + 1}
+                    </p>
+
+                    <h2 className="mt-1 text-2xl font-semibold text-slate-900">
+                      {question.question}
+                    </h2>
+                  </div>
+
+                  {submitted ? (
+                    isCorrect ? (
+                      <Badge variant="success">Correta</Badge>
+                    ) : (
+                      <Badge variant="warning">Incorreta</Badge>
+                    )
+                  ) : selectedAnswer ? (
+                    <Badge variant="info">Respondida</Badge>
+                  ) : (
+                    <Badge variant="warning">Pendente</Badge>
+                  )}
+                </div>
+
+                <div className="grid gap-3">
+                  {question.shuffledOptions.map((option) => {
+                    const isSelected = selectedAnswer === option;
+                    const isCorrectOption = option === question.correctAnswer;
+
+                    let className =
+                      "w-full rounded-2xl border px-4 py-3 text-left text-sm transition ";
+
+                    if (!submitted) {
+                      className += isSelected
+                        ? "border-blue-600 bg-blue-50 text-blue-900"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50";
+                    } else {
+                      if (isCorrectOption) {
+                        className +=
+                          "border-green-500 bg-green-50 text-green-900";
+                      } else if (isSelected && !isCorrectOption) {
+                        className += "border-red-500 bg-red-50 text-red-900";
+                      } else {
+                        className +=
+                          "border-slate-200 bg-white text-slate-500";
+                      }
+                    }
+
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => handleSelect(question.id, option)}
+                        disabled={submitted}
+                        className={className}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {submitted && !isCorrect && (
+                  <TextMessage variant="error">
+                    Resposta correta: {question.correctAnswer}
+                  </TextMessage>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {!submitted ? (
+        <Card className="rounded-[28px] border-slate-200 bg-slate-50">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
+              <p className="text-sm font-medium text-slate-700">
+                Finalização do quiz
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Responda todas as perguntas para liberar a avaliação final.
+              </p>
+            </div>
+
+            <Button
+              onClick={handleSubmit}
+              disabled={!allAnswered}
+              className={`sm:w-auto ${
+                !allAnswered ? "bg-slate-400 hover:bg-slate-400" : ""
+              }`}
+            >
+              Finalizar quiz
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <Card className="rounded-[28px] border-slate-200 bg-slate-50">
+          <div className="flex flex-col gap-5">
+            <div>
               <p className="text-sm font-medium text-blue-700">
-                Progresso do curso
+                Resultado final
               </p>
               <h2 className="mt-1 text-2xl font-bold text-slate-900">
-                {progressPercentage}% concluído
+                {score}/{totalQuestions} acertos ({percentage}%)
               </h2>
             </div>
 
-            <Badge variant={progressPercentage === 100 ? "success" : "info"}>
-              {completedIds.length}/{course.lessons.length} aulas concluídas
-            </Badge>
-          </div>
-
-          <ProgressBar value={progressPercentage} />
-
-          {isCourseCompleted && (
-            <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-green-700">
-                  Quiz final liberado
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Você já pode continuar para a etapa final do treinamento.
-                </p>
-              </div>
-
-              <Link
-                href="/quiz"
-                className="inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-green-700"
-              >
-                Ir para o quiz final
-              </Link>
-            </div>
-          )}
-        </Card>
-
-        <div className="grid gap-6">
-          {course.lessons.map((lesson) => {
-            const completed = completedIds.includes(lesson.id);
-            const watched = watchedIds.includes(lesson.id);
-            const canComplete = completed || watched;
-            const isLoading = loadingLessonId === lesson.id;
-
-            return (
-              <Card key={lesson.id} className="rounded-[28px] p-6">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">
-                        Aula {lesson.order}
-                      </p>
-
-                      <h2 className="mt-1 text-2xl font-semibold text-slate-900">
-                        {lesson.title}
-                      </h2>
-
-                      <p className="mt-3 text-sm leading-6 text-slate-600">
-                        {lesson.description}
-                      </p>
-                    </div>
-
-                    {completed ? (
-                      <Badge variant="success">Concluída</Badge>
-                    ) : watched ? (
-                      <Badge variant="info">Vídeo assistido</Badge>
-                    ) : (
-                      <Badge variant="warning">Pendente</Badge>
-                    )}
-                  </div>
-
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
-                    <YouTube
-                      videoId={lesson.videoId}
-                      opts={{
-                        width: "100%",
-                        height: "420",
-                        playerVars: {
-                          rel: 0,
-                        },
-                      }}
-                      className="w-full"
-                      iframeClassName="aspect-video h-auto w-full"
-                      onEnd={(_event: YouTubeEvent<number>) =>
-                        handleVideoEnd(lesson.id)
-                      }
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm">
-                      {!completed && !watched && (
-                        <p className="text-slate-500">
-                          Assista ao vídeo até o final para liberar a conclusão.
-                        </p>
-                      )}
-
-                      {!completed && watched && (
-                        <p className="font-medium text-blue-700">
-                          Vídeo concluído. Agora você já pode marcar esta aula.
-                        </p>
-                      )}
-
-                      {completed && (
-                        <p className="font-medium text-green-700">
-                          ✓ Aula concluída com sucesso.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="w-full sm:w-auto">
-                      <Button
-                        onClick={() => handleCompleteLesson(lesson.id)}
-                        disabled={!canComplete || completed || isLoading}
-                        className={`sm:w-auto ${
-                          completed
-                            ? "bg-green-600 hover:bg-green-600"
-                            : !canComplete
-                            ? "bg-slate-400 hover:bg-slate-400"
-                            : ""
-                        }`}
-                      >
-                        {completed
-                          ? "Aula concluída"
-                          : isLoading
-                          ? "Salvando..."
-                          : "Marcar como concluída"}
-                      </Button>
-                    </div>
-                  </div>
+            {passed ? (
+              <div className="flex flex-col gap-4 rounded-2xl border border-green-200 bg-green-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-green-700">
+                    Parabéns! Você foi aprovado.
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Você atingiu a nota mínima de {passingScore}% e já pode
+                    emitir o certificado.
+                  </p>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
 
-        {message && <TextMessage variant={messageVariant}>{message}</TextMessage>}
-      </div>
-    </>
+                <Link
+                  href="/certificado"
+                  className="inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-green-700"
+                >
+                  Ir para o certificado
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-red-700">
+                    Você não atingiu a nota mínima.
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    É necessário alcançar pelo menos {passingScore}% para seguir
+                    para o certificado.
+                  </p>
+                </div>
+
+                <Button onClick={handleRetry} className="sm:w-auto">
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }
+
