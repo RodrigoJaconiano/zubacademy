@@ -83,7 +83,7 @@ export default function TermsModal({
             progresso e emissão de certificado vinculadas ao ambiente de
             treinamento.
             <span className="mt-2 block font-semibold text-red-600">
-              A liberação do aplicativo da pessoa depende da disponibilidade de
+              <br></br>A liberação do aplicativo da pessoa depende da disponibilidade de
               vagas de freelancers na loja.
             </span>
           </p>
