@@ -42,14 +42,6 @@ export const courseData: Course = {
       videoId: "05Y2ku4Dnrs",
       order: 2,
     },
-    {
-      id: "aula-3",
-      title: "Qualidade e conferência",
-      description:
-        "Boas práticas para evitar erros e manter o padrão da operação.",
-      videoId: "dQw4w9WgXcQ",
-      order: 3,
-    },
   ],
 };
 
