@@ -23,6 +23,23 @@ type CourseClientProps = {
   initialProgress: LessonProgressRow[];
 };
 
+type LessonWatchState = {
+  maxAllowedTime: number;
+  percent: number;
+  completed: boolean;
+  duration: number;
+};
+
+type YouTubePlayerLike = {
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+};
+
+const MIN_PERCENT_TO_COMPLETE = 90;
+const SEEK_TOLERANCE_SECONDS = 2.5;
+const POLLING_INTERVAL_MS = 1000;
+
 export default function CourseClient({
   course,
   initialProgress,
@@ -32,7 +49,11 @@ export default function CourseClient({
       .filter((item) => item.completed)
       .map((item) => item.lesson_id)
   );
-  const [watchedIds, setWatchedIds] = useState<string[]>([]);
+
+  const [watchStateByLesson, setWatchStateByLesson] = useState<
+    Record<string, LessonWatchState>
+  >({});
+
   const [loadingLessonId, setLoadingLessonId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [messageVariant, setMessageVariant] = useState<
@@ -42,9 +63,21 @@ export default function CourseClient({
   const [isMounted, setIsMounted] = useState(false);
 
   const previousCompletedCountRef = useRef(completedIds.length);
+  const playerRefs = useRef<Record<string, YouTubePlayerLike | null>>({});
+  const intervalRefs = useRef<Record<string, ReturnType<typeof setInterval> | null>>(
+    {}
+  );
 
   useEffect(() => {
     setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(intervalRefs.current).forEach((intervalId) => {
+        if (intervalId) clearInterval(intervalId);
+      });
+    };
   }, []);
 
   const progressPercentage = useMemo(() => {
@@ -69,11 +102,175 @@ export default function CourseClient({
     previousCompletedCountRef.current = completedIds.length;
   }, [completedIds.length, course.lessons.length]);
 
-  function handleVideoEnd(lessonId: string) {
-    setWatchedIds((prev) => {
-      if (prev.includes(lessonId)) return prev;
-      return [...prev, lessonId];
+  function clearLessonInterval(lessonId: string) {
+    const intervalId = intervalRefs.current[lessonId];
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalRefs.current[lessonId] = null;
+    }
+  }
+
+  function updateLessonWatchState(
+    lessonId: string,
+    updater: (prev: LessonWatchState) => LessonWatchState
+  ) {
+    setWatchStateByLesson((prev) => {
+      const current: LessonWatchState = prev[lessonId] ?? {
+        maxAllowedTime: 0,
+        percent: 0,
+        completed: false,
+        duration: 0,
+      };
+
+      return {
+        ...prev,
+        [lessonId]: updater(current),
+      };
     });
+  }
+
+  function markLessonVideoCompleted(lessonId: string, duration?: number) {
+    updateLessonWatchState(lessonId, (prev) => ({
+      ...prev,
+      duration: duration ?? prev.duration,
+      maxAllowedTime: duration ?? prev.maxAllowedTime,
+      percent: 100,
+      completed: true,
+    }));
+  }
+
+  function startProgressTracking(lessonId: string) {
+    clearLessonInterval(lessonId);
+
+    intervalRefs.current[lessonId] = setInterval(() => {
+      const player = playerRefs.current[lessonId];
+      if (!player) return;
+
+      try {
+        const currentTime = player.getCurrentTime() || 0;
+        const duration = player.getDuration() || 0;
+
+        if (!duration || Number.isNaN(duration)) return;
+
+        setWatchStateByLesson((prev) => {
+          const currentState: LessonWatchState = prev[lessonId] ?? {
+            maxAllowedTime: 0,
+            percent: 0,
+            completed: false,
+            duration,
+          };
+
+          const maxAllowedTime = currentState.maxAllowedTime;
+          const hasSkippedForward =
+            currentTime > maxAllowedTime + SEEK_TOLERANCE_SECONDS;
+
+          if (hasSkippedForward) {
+            player.seekTo(maxAllowedTime, true);
+
+            setMessageVariant("error");
+            setMessage(
+              "Não é possível pular o vídeo. Assista à aula para liberar a conclusão."
+            );
+
+            return prev;
+          }
+
+          const newMaxAllowedTime =
+            currentTime > maxAllowedTime ? currentTime : maxAllowedTime;
+
+          const newPercent = Math.min(
+            100,
+            Math.round((newMaxAllowedTime / duration) * 100)
+          );
+
+          const completed =
+            currentState.completed || newPercent >= MIN_PERCENT_TO_COMPLETE;
+
+          return {
+            ...prev,
+            [lessonId]: {
+              maxAllowedTime: newMaxAllowedTime,
+              percent: newPercent,
+              completed,
+              duration,
+            },
+          };
+        });
+      } catch {
+        // evita quebrar a UI caso o player ainda não esteja pronto
+      }
+    }, POLLING_INTERVAL_MS);
+  }
+
+  function handlePlayerReady(lessonId: string, event: YouTubeEvent<unknown>) {
+    playerRefs.current[lessonId] = event.target as unknown as YouTubePlayerLike;
+
+    try {
+      const duration = (
+        event.target as unknown as YouTubePlayerLike
+      ).getDuration?.();
+
+      if (duration && !Number.isNaN(duration)) {
+        updateLessonWatchState(lessonId, (prev) => ({
+          ...prev,
+          duration,
+        }));
+      }
+    } catch {
+      // noop
+    }
+  }
+
+  function handleVideoStateChange(
+    lessonId: string,
+    event: YouTubeEvent<number>
+  ) {
+    const player = event.target as unknown as YouTubePlayerLike;
+    playerRefs.current[lessonId] = player;
+
+    // 1 = playing
+    if (event.data === 1) {
+      startProgressTracking(lessonId);
+      return;
+    }
+
+    // 0 = ended
+    if (event.data === 0) {
+      clearLessonInterval(lessonId);
+
+      try {
+        const duration = player.getDuration() || 0;
+        const lessonState = watchStateByLesson[lessonId];
+        const maxAllowedTime = lessonState?.maxAllowedTime ?? 0;
+        const watchedPercent = duration
+          ? Math.round((maxAllowedTime / duration) * 100)
+          : 0;
+
+        const canCompleteByProgress =
+          watchedPercent >= MIN_PERCENT_TO_COMPLETE ||
+          duration - maxAllowedTime <= SEEK_TOLERANCE_SECONDS;
+
+        if (canCompleteByProgress) {
+          markLessonVideoCompleted(lessonId, duration);
+        } else {
+          player.seekTo(maxAllowedTime, true);
+          setMessageVariant("error");
+          setMessage(
+            "Você ainda não assistiu tempo suficiente da aula para concluí-la."
+          );
+        }
+      } catch {
+        setMessageVariant("error");
+        setMessage("Não foi possível validar o progresso do vídeo.");
+      }
+
+      return;
+    }
+
+    // 2 = paused, 3 = buffering, 5 = cued
+    if (event.data === 2 || event.data === 3 || event.data === 5) {
+      clearLessonInterval(lessonId);
+    }
   }
 
   async function handleCompleteLesson(lessonId: string) {
@@ -181,7 +378,9 @@ export default function CourseClient({
         <div className="grid gap-6">
           {course.lessons.map((lesson) => {
             const completed = completedIds.includes(lesson.id);
-            const watched = watchedIds.includes(lesson.id);
+            const lessonWatchState = watchStateByLesson[lesson.id];
+            const watchedPercent = lessonWatchState?.percent ?? 0;
+            const watched = lessonWatchState?.completed ?? false;
             const canComplete = completed || watched;
             const isLoading = loadingLessonId === lesson.id;
 
@@ -206,7 +405,7 @@ export default function CourseClient({
                     {completed ? (
                       <Badge variant="success">Concluída</Badge>
                     ) : watched ? (
-                      <Badge variant="info">Vídeo assistido</Badge>
+                      <Badge variant="info">Vídeo liberado</Badge>
                     ) : (
                       <Badge variant="warning">Pendente</Badge>
                     )}
@@ -223,15 +422,23 @@ export default function CourseClient({
                           playerVars: {
                             rel: 0,
                             modestbranding: 1,
+                            playsinline: 1,
                           },
                         }}
                         className="w-full"
                         iframeClassName="aspect-video h-auto w-full"
-                        onEnd={(_event: YouTubeEvent<number>) =>
-                          handleVideoEnd(lesson.id)
+                        onReady={(event: YouTubeEvent<unknown>) =>
+                          handlePlayerReady(lesson.id, event)
+                        }
+                        onStateChange={(event: YouTubeEvent<number>) =>
+                          handleVideoStateChange(lesson.id, event)
                         }
                         onError={(event: YouTubeEvent<number>) => {
                           console.log("YouTube error:", lesson.videoId, event.data);
+                          setMessageVariant("error");
+                          setMessage(
+                            "Não foi possível carregar este vídeo no momento."
+                          );
                         }}
                       />
                     ) : (
@@ -244,14 +451,21 @@ export default function CourseClient({
                   <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-sm">
                       {!completed && !watched && (
-                        <p className="text-slate-500">
-                          Assista ao vídeo até o final para liberar a conclusão.
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-slate-500">
+                            Assista a pelo menos {MIN_PERCENT_TO_COMPLETE}% do
+                            vídeo para liberar a conclusão.
+                          </p>
+                          <p className="font-medium text-slate-700">
+                            Progresso assistido: {watchedPercent}%
+                          </p>
+                        </div>
                       )}
 
                       {!completed && watched && (
                         <p className="font-medium text-blue-700">
-                          Vídeo concluído. Agora você já pode marcar esta aula.
+                          Vídeo assistido o suficiente. Agora você já pode marcar
+                          esta aula.
                         </p>
                       )}
 
@@ -295,3 +509,4 @@ export default function CourseClient({
     </>
   );
 }
+
