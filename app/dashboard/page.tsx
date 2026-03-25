@@ -40,6 +40,7 @@ type RawProfileRow = {
   address?: string | null;
   number?: string | number | null;
   terms_accepted?: boolean | null;
+  store_id?: string | null;
 };
 
 type LessonProgressRow = {
@@ -73,7 +74,7 @@ export default async function DashboardPage() {
     supabase
       .from("profiles")
       .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
       )
       .eq("id", user.id)
       .maybeSingle<RawProfileRow>(),
@@ -118,6 +119,12 @@ export default async function DashboardPage() {
   }
 
   const profileRow = rawProfile ?? null;
+
+  const hasSelectedStore = Boolean(profileRow?.store_id);
+
+  if (!hasSelectedStore) {
+    redirect("/unidade");
+  }
 
   const profile: ProfileData | null = profileRow
     ? {
@@ -282,7 +289,7 @@ export default async function DashboardPage() {
 
                 <Link
                   href="/quiz"
-                  className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition duration-200 ${
+                  className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
                     dashboardState.quizUnlocked && !quizCompleted
                       ? "border border-blue-200 bg-blue-50 text-blue-700 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white"
                       : "border border-slate-200 bg-slate-100 text-slate-400"

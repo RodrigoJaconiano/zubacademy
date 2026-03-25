@@ -13,6 +13,7 @@ type RawProfileRow = {
   address?: string | null;
   number?: string | number | null;
   terms_accepted?: boolean | null;
+  store_id?: string | null;
 };
 
 export default async function HomePage() {
@@ -26,7 +27,7 @@ export default async function HomePage() {
     const { data: rawProfile } = await supabase
       .from("profiles")
       .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
       )
       .eq("id", user.id)
       .maybeSingle<RawProfileRow>();
@@ -50,6 +51,11 @@ export default async function HomePage() {
     const missingProfileFields = getMissingProfileFields(profile);
     const profileIncomplete = missingProfileFields.length > 0;
     const termsAccepted = Boolean(rawProfile?.terms_accepted);
+    const hasSelectedStore = Boolean(rawProfile?.store_id);
+
+    if (!hasSelectedStore) {
+      redirect("/unidade");
+    }
 
     redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
   }

@@ -27,6 +27,7 @@ type RawProfileRow = {
   address?: string | null;
   number?: string | number | null;
   terms_accepted?: boolean | null;
+  store_id?: string | null;
 };
 
 async function sleep(ms: number) {
@@ -64,7 +65,7 @@ export default function LoginPage() {
     const { data: rawProfile, error: profileError } = await supabase
       .from("profiles")
       .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
       )
       .eq("id", user.id)
       .maybeSingle<RawProfileRow>();
@@ -95,8 +96,15 @@ export default function LoginPage() {
     const missingProfileFields = getMissingProfileFields(profile);
     const profileIncomplete = missingProfileFields.length > 0;
     const termsAccepted = Boolean(rawProfile?.terms_accepted);
+    const hasSelectedStore = Boolean(rawProfile?.store_id);
 
     setCheckingSession(false);
+
+    if (!hasSelectedStore) {
+      router.replace("/unidade");
+      return;
+    }
+
     router.replace(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
   }
 
