@@ -31,6 +31,8 @@ export type NearbyStoresResponse = {
 export type SelectStoresResponse = {
   success: boolean;
   message: string;
+  alreadySelected?: boolean;
+  redirectTo?: "/perfil" | "/dashboard";
   primaryStore?: {
     id: string;
     name: string;

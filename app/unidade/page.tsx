@@ -27,6 +27,8 @@ type RawProfileRow = {
 
 type StoreApplicationRow = {
   id: string;
+  is_primary?: boolean | null;
+  store_id?: string | null;
 };
 
 export default async function UnidadePage() {
@@ -51,9 +53,8 @@ export default async function UnidadePage() {
         .maybeSingle<RawProfileRow>(),
       supabase
         .from("store_applications")
-        .select("id")
+        .select("id, is_primary, store_id")
         .eq("user_id", user.id)
-        .limit(1)
         .returns<StoreApplicationRow[]>(),
     ]);
 
@@ -88,8 +89,13 @@ export default async function UnidadePage() {
   const missingProfileFields = getMissingProfileFields(profile);
   const profileIncomplete = missingProfileFields.length > 0;
   const termsAccepted = Boolean(rawProfile?.terms_accepted);
-  const hasSelectedStore =
-    Boolean(rawProfile?.store_id) || (applications?.length ?? 0) > 0;
+
+  const primaryApplication =
+    applications?.find((application) => application.is_primary) ?? null;
+
+  const hasSelectedStore = Boolean(
+    rawProfile?.store_id || primaryApplication?.store_id
+  );
 
   if (hasSelectedStore) {
     redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { calculateDistanceKm, type Coordinates } from "@/lib/utils/distance";
+import { getMissingProfileFields, type ProfileData } from "@/lib/utils/progress";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,21 @@ type StoreRecord = {
   is_active: boolean;
 };
 
+type ProfileRow = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  cpf?: string | null;
+  cep?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  number?: string | number | null;
+  terms_accepted?: boolean | null;
+  store_id?: string | null;
+};
+
 function isValidCoordinate(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -33,6 +49,30 @@ function normalizeStoreIds(storeIds: unknown): string[] {
   }
 
   return [...new Set(storeIds.map((id) => String(id).trim()).filter(Boolean))];
+}
+
+function getRedirectTo(profile: ProfileRow | null) {
+  const profileData: ProfileData | null = profile
+    ? {
+        name: profile.name ?? null,
+        phone: profile.phone ?? null,
+        cpf: profile.cpf ?? null,
+        cep: profile.cep ?? null,
+        city: profile.city ?? null,
+        state: profile.state ?? null,
+        address: profile.address ?? null,
+        number:
+          profile.number === null || profile.number === undefined
+            ? null
+            : String(profile.number),
+      }
+    : null;
+
+  const missingProfileFields = getMissingProfileFields(profileData);
+  const profileIncomplete = missingProfileFields.length > 0;
+  const termsAccepted = Boolean(profile?.terms_accepted);
+
+  return profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard";
 }
 
 export async function POST(request: Request) {
@@ -85,18 +125,18 @@ export async function POST(request: Request) {
 
     const adminSupabase = createAdminClient();
 
-    // Mantém o comportamento de seleção única:
-    // se já houver loja principal no profile ou candidaturas registradas, bloqueia nova seleção.
     const [{ data: existingProfile, error: profileError }, { data: existingApplications, error: applicationsError }] =
       await Promise.all([
         adminSupabase
           .from("profiles")
-          .select("id, store_id")
+          .select(
+            "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+          )
           .eq("id", user.id)
-          .maybeSingle(),
+          .maybeSingle<ProfileRow>(),
         adminSupabase
           .from("store_applications")
-          .select("id", { count: "exact", head: false })
+          .select("id")
           .eq("user_id", user.id)
           .limit(1),
       ]);
@@ -131,10 +171,12 @@ export async function POST(request: Request) {
     if (existingProfile?.store_id || (existingApplications?.length ?? 0) > 0) {
       return NextResponse.json(
         {
-          success: false,
-          message: "Você já concluiu a seleção de lojas.",
+          success: true,
+          alreadySelected: true,
+          message: "Suas lojas já foram selecionadas anteriormente.",
+          redirectTo: getRedirectTo(existingProfile ?? null),
         },
-        { status: 409 }
+        { status: 200 }
       );
     }
 
@@ -201,7 +243,6 @@ export async function POST(request: Request) {
     const primaryStore = storesWithDistance[0];
     const now = new Date().toISOString();
 
-    // Reserva vaga somente na loja principal
     const { data: updatedPrimaryRows, error: updatePrimaryError } =
       await adminSupabase
         .from("stores")
@@ -254,6 +295,15 @@ export async function POST(request: Request) {
     if (applicationError) {
       console.error("Erro ao registrar candidaturas:", applicationError);
 
+      await adminSupabase
+        .from("stores")
+        .update({
+          vacancies: primaryStore.vacancies,
+          applied_count: primaryStore.applied_count,
+          updated_at: now,
+        })
+        .eq("id", primaryStore.id);
+
       return NextResponse.json(
         {
           success: false,
@@ -263,24 +313,53 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: upsertProfileError } = await adminSupabase
+    const profilePayload = {
+      id: user.id,
+      email: existingProfile?.email ?? user.email ?? null,
+      name: existingProfile?.name ?? null,
+      phone: existingProfile?.phone ?? null,
+      cpf: existingProfile?.cpf ?? null,
+      cep: existingProfile?.cep ?? null,
+      city: existingProfile?.city ?? null,
+      state: existingProfile?.state ?? null,
+      address: existingProfile?.address ?? null,
+      number:
+        existingProfile?.number === null || existingProfile?.number === undefined
+          ? null
+          : String(existingProfile.number),
+      terms_accepted: existingProfile?.terms_accepted ?? false,
+      store_id: primaryStore.id,
+      store_selected_at: now,
+      updated_at: now,
+    };
+
+    const { data: savedProfile, error: upsertProfileError } = await adminSupabase
       .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          email: user.email ?? null,
-          store_id: primaryStore.id,
-          store_selected_at: now,
-          updated_at: now,
-        },
-        { onConflict: "id" }
-      );
+      .upsert(profilePayload, { onConflict: "id" })
+      .select(
+        "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+      )
+      .maybeSingle<ProfileRow>();
 
     if (upsertProfileError) {
       console.error(
         "Erro ao salvar a loja principal no perfil:",
         upsertProfileError
       );
+
+      await adminSupabase
+        .from("store_applications")
+        .delete()
+        .eq("user_id", user.id);
+
+      await adminSupabase
+        .from("stores")
+        .update({
+          vacancies: primaryStore.vacancies,
+          applied_count: primaryStore.applied_count,
+          updated_at: now,
+        })
+        .eq("id", primaryStore.id);
 
       return NextResponse.json(
         {
@@ -294,7 +373,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Seleção de lojas salva com sucesso.",
+      alreadySelected: false,
+      message: "Lojas selecionadas com sucesso.",
+      redirectTo: getRedirectTo(savedProfile ?? profilePayload),
       primaryStore: {
         id: primaryStore.id,
         name: primaryStore.name,

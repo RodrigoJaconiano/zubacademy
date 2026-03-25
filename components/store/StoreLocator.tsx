@@ -37,6 +37,11 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
   const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
 
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+  const [selectionSuccess, setSelectionSuccess] = useState<{
+    primaryStoreName?: string;
+    secondaryStoreNames: string[];
+    alreadySelected?: boolean;
+  } | null>(null);
 
   const [message, setMessage] = useState("");
   const [messageVariant, setMessageVariant] =
@@ -84,6 +89,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
   function resetSelection() {
     setSelectedStoreIds([]);
+    setSelectionSuccess(null);
   }
 
   function handleStoresLoaded(data: {
@@ -108,6 +114,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
   async function handleUseMyLocation() {
     clearMessage();
+    setSelectionSuccess(null);
     setIsSearching(true);
 
     try {
@@ -150,6 +157,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
   async function handleSearchByCep() {
     clearMessage();
+    setSelectionSuccess(null);
 
     const cleanCep = normalizeCep(cep);
 
@@ -183,6 +191,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
   function handleToggleStore(storeId: string) {
     clearMessage();
+    setSelectionSuccess(null);
 
     setSelectedStoreIds((current) => {
       if (current.includes(storeId)) {
@@ -195,6 +204,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
   async function handleConfirmSelection() {
     clearMessage();
+    setSelectionSuccess(null);
 
     if (!origin) {
       setMessageVariant("error");
@@ -217,10 +227,20 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
       });
 
       setMessageVariant("success");
-      setMessage(data.message || "Seleção de lojas salva com sucesso.");
+      setMessage(data.message || "Lojas selecionadas com sucesso.");
 
-      router.replace("/perfil");
-      router.refresh();
+      setSelectionSuccess({
+        primaryStoreName: data.primaryStore?.name,
+        secondaryStoreNames: data.secondaryStores?.map((store) => store.name) ?? [],
+        alreadySelected: data.alreadySelected,
+      });
+
+      const redirectTo = data.redirectTo ?? "/perfil";
+
+      window.setTimeout(() => {
+        router.replace(redirectTo);
+        router.refresh();
+      }, 1400);
     } catch (error) {
       console.error("Erro ao salvar seleção de lojas:", error);
       setMessageVariant("error");
@@ -283,6 +303,60 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
           {message ? (
             <TextMessage variant={messageVariant}>{message}</TextMessage>
           ) : null}
+
+{selectionSuccess ? (
+  <Card className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-emerald-700">
+          {selectionSuccess.alreadySelected
+            ? "Lojas já selecionadas"
+            : "Lojas selecionadas com sucesso"}
+        </p>
+
+        <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+          Sucesso
+        </span>
+      </div>
+
+      {selectionSuccess.primaryStoreName ? (
+        <div className="rounded-2xl border border-emerald-200 bg-white p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-slate-700">Loja principal</p>
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+              Principal
+            </span>
+          </div>
+
+          <p className="mt-2 text-sm font-semibold text-slate-900">
+            {selectionSuccess.primaryStoreName}
+          </p>
+        </div>
+      ) : null}
+
+      {selectionSuccess.secondaryStoreNames.length > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3">
+          <p className="text-sm font-medium text-slate-700">
+            Lojas secundárias
+          </p>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {selectionSuccess.secondaryStoreNames.map((storeName) => (
+              <span
+                key={storeName}
+                className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+              >
+                {storeName}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <p className="text-sm text-slate-600">Redirecionando...</p>
+    </div>
+  </Card>
+) : null}
         </div>
       </Card>
 
@@ -296,13 +370,12 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
               <h3 className="mt-1 text-lg font-bold text-slate-900">
                 {originLabel}
               </h3>
-              <p className="mt-2 text-sm text-blue-700">
-                Lojas com vagas disponíveis em um raio de 10km.
-              </p>
-              <p className="mt-2 text-sm text-red-600 font-bold">Escolha quantas lojas tiver disponibilidade para atuar e confirme sua seleção ao final da página.
-                <br></br>A loja principal será a mais próxima de sua localização.
+              <p className="mt-2 text-sm text-slate-600">
+                Apenas lojas com vagas disponíveis em um raio de 10 km aparecem
+                na lista.
               </p>
             </div>
+
             <StoreList
               stores={hasStores ? stores : []}
               loading={isSearching}
