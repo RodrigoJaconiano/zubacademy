@@ -7,14 +7,30 @@ import type { NearbyStore } from "@/lib/services/stores";
 
 type StoreCardProps = {
   store: NearbyStore;
-  selecting?: boolean;
-  onSelect: (storeId: string) => void;
+  selected?: boolean;
+  onToggleSelect: (storeId: string) => void;
 };
+
+function formatVacanciesLabel(vacancies: number) {
+  if (vacancies === 1) {
+    return "1 vaga disponível";
+  }
+
+  return `${vacancies} vagas disponíveis`;
+}
+
+function formatApplicationsLabel(appliedCount: number) {
+  if (appliedCount === 1) {
+    return "1 candidatura";
+  }
+
+  return `${appliedCount} candidaturas`;
+}
 
 export default function StoreCard({
   store,
-  selecting = false,
-  onSelect,
+  selected = false,
+  onToggleSelect,
 }: StoreCardProps) {
   return (
     <Card className="rounded-[24px] p-5">
@@ -31,23 +47,22 @@ export default function StoreCard({
 
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-              {store.vacancies} vaga{store.vacancies === 1 ? "" : "s"} disponível
-              {store.vacancies === 1 ? "" : "eis"}
+              {formatVacanciesLabel(store.vacancies)}
             </span>
 
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-              {store.appliedCount} aplicação{store.appliedCount === 1 ? "" : "ões"}
+              {formatApplicationsLabel(store.appliedCount)}
             </span>
           </div>
         </div>
 
-        <div className="lg:min-w-[180px]">
+        <div className="lg:min-w-[200px]">
           <Button
             type="button"
-            onClick={() => onSelect(store.id)}
-            disabled={selecting || store.vacancies <= 0}
+            onClick={() => onToggleSelect(store.id)}
+            disabled={store.vacancies <= 0}
           >
-            {selecting ? "Selecionando..." : "Selecionar loja"}
+            {selected ? "Remover seleção" : "Selecionar loja"}
           </Button>
         </div>
       </div>

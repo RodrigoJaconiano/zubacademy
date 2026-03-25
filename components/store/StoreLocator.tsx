@@ -9,12 +9,14 @@ import TextMessage from "@/components/ui/text-message";
 
 import CepSearchForm from "@/components/store/CepSearchForm";
 import StoreList from "@/components/store/StoreList";
+import SelectedStoreSummary from "@/components/store/SelectedStoreSummary";
 import {
   fetchNearbyStores,
   normalizeCep,
-  selectStore,
+  selectStores,
   type NearbyStore,
 } from "@/lib/services/stores";
+import type { Coordinates } from "@/lib/utils/distance";
 
 type StoreLocatorProps = {
   userEmail?: string | null;
@@ -28,15 +30,43 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
   const [cep, setCep] = useState("");
   const [stores, setStores] = useState<NearbyStore[]>([]);
+  const [origin, setOrigin] = useState<Coordinates | null>(null);
   const [originLabel, setOriginLabel] = useState("Nenhuma região definida");
+
   const [isSearching, setIsSearching] = useState(false);
-  const [selectingStoreId, setSelectingStoreId] = useState<string | null>(null);
+  const [isSubmittingSelection, setIsSubmittingSelection] = useState(false);
+
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
 
   const [message, setMessage] = useState("");
   const [messageVariant, setMessageVariant] =
     useState<MessageVariant>("default");
 
   const hasStores = useMemo(() => stores.length > 0, [stores]);
+
+  const selectedStores = useMemo(
+    () => stores.filter((store) => selectedStoreIds.includes(store.id)),
+    [stores, selectedStoreIds]
+  );
+
+  const primarySelectedStore = useMemo(() => {
+    if (selectedStores.length === 0) {
+      return null;
+    }
+
+    return [...selectedStores].sort((a, b) => {
+      const distanceA =
+        typeof a.distanceKm === "number"
+          ? a.distanceKm
+          : Number.POSITIVE_INFINITY;
+      const distanceB =
+        typeof b.distanceKm === "number"
+          ? b.distanceKm
+          : Number.POSITIVE_INFINITY;
+
+      return distanceA - distanceB;
+    })[0];
+  }, [selectedStores]);
 
   function clearMessage() {
     setMessage("");
@@ -50,6 +80,30 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
         block: "start",
       });
     }, 100);
+  }
+
+  function resetSelection() {
+    setSelectedStoreIds([]);
+  }
+
+  function handleStoresLoaded(data: {
+    stores: NearbyStore[];
+    originLabel: string;
+    origin: Coordinates | null;
+  }) {
+    setStores(data.stores);
+    setOrigin(data.origin);
+    setOriginLabel(data.originLabel);
+    resetSelection();
+
+    setMessage(
+      data.stores.length > 0
+        ? "Encontramos lojas com vagas disponíveis próximas à região informada."
+        : "Não encontramos lojas com vagas disponíveis em um raio de 10 km dessa região."
+    );
+    setMessageVariant(data.stores.length > 0 ? "success" : "default");
+
+    scrollToResults();
   }
 
   async function handleUseMyLocation() {
@@ -76,16 +130,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
         longitude: position.coords.longitude,
       });
 
-      setStores(data.stores);
-      setOriginLabel(data.originLabel);
-      setMessage(
-        data.stores.length
-          ? "Encontramos lojas próximas da sua localização."
-          : "Não encontramos lojas com vagas em um raio de 10 km da sua localização."
-      );
-      setMessageVariant(data.stores.length ? "success" : "default");
-
-      scrollToResults();
+      handleStoresLoaded(data);
     } catch (error) {
       console.error("Erro ao buscar por geolocalização:", error);
       setMessageVariant("error");
@@ -95,6 +140,9 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
           : "Não foi possível usar sua localização."
       );
       setStores([]);
+      setOrigin(null);
+      setOriginLabel("Nenhuma região definida");
+      resetSelection();
     } finally {
       setIsSearching(false);
     }
@@ -115,17 +163,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
 
     try {
       const data = await fetchNearbyStores({ cep: cleanCep });
-
-      setStores(data.stores);
-      setOriginLabel(data.originLabel);
-      setMessage(
-        data.stores.length
-          ? "Encontramos lojas para a região do CEP informado."
-          : "Não encontramos lojas com vagas em um raio de 10 km dessa região."
-      );
-      setMessageVariant(data.stores.length ? "success" : "default");
-
-      scrollToResults();
+      handleStoresLoaded(data);
     } catch (error) {
       console.error("Erro ao buscar lojas por CEP:", error);
       setMessageVariant("error");
@@ -135,33 +173,64 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
           : "Não foi possível buscar lojas por CEP."
       );
       setStores([]);
+      setOrigin(null);
+      setOriginLabel("Nenhuma região definida");
+      resetSelection();
     } finally {
       setIsSearching(false);
     }
   }
 
-  async function handleSelectStore(storeId: string) {
+  function handleToggleStore(storeId: string) {
     clearMessage();
-    setSelectingStoreId(storeId);
+
+    setSelectedStoreIds((current) => {
+      if (current.includes(storeId)) {
+        return current.filter((id) => id !== storeId);
+      }
+
+      return [...current, storeId];
+    });
+  }
+
+  async function handleConfirmSelection() {
+    clearMessage();
+
+    if (!origin) {
+      setMessageVariant("error");
+      setMessage("Busque sua região antes de confirmar a seleção das lojas.");
+      return;
+    }
+
+    if (selectedStoreIds.length === 0) {
+      setMessageVariant("error");
+      setMessage("Selecione pelo menos uma loja.");
+      return;
+    }
+
+    setIsSubmittingSelection(true);
 
     try {
-      const data = await selectStore(storeId);
+      const data = await selectStores({
+        storeIds: selectedStoreIds,
+        origin,
+      });
 
       setMessageVariant("success");
-      setMessage(data.message || "Loja selecionada com sucesso.");
+      setMessage(data.message || "Seleção de lojas salva com sucesso.");
 
       router.replace("/perfil");
       router.refresh();
     } catch (error) {
-      console.error("Erro ao selecionar loja:", error);
+      console.error("Erro ao salvar seleção de lojas:", error);
       setMessageVariant("error");
       setMessage(
         error instanceof Error
           ? error.message
-          : "Não foi possível selecionar a loja."
+          : "Não foi possível salvar a seleção das lojas."
       );
     } finally {
-      setSelectingStoreId(null);
+      setIsSubmittingSelection(false);
     }
   }
 
@@ -174,11 +243,12 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
               Etapa obrigatória
             </p>
             <h2 className="mt-2 text-2xl font-bold text-slate-900">
-              Escolha a loja mais próxima
+              Escolha uma ou mais lojas
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
               Antes de concluir seu cadastro, precisamos vincular sua conta a
-              uma loja com vagas disponíveis.
+              uma loja principal com vagas disponíveis. Você também pode
+              selecionar lojas secundárias.
             </p>
 
             {userEmail ? (
@@ -192,7 +262,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
             <Button
               type="button"
               onClick={handleUseMyLocation}
-              disabled={isSearching}
+              disabled={isSearching || isSubmittingSelection}
             >
               {isSearching ? "Buscando..." : "Usar minha localização"}
             </Button>
@@ -216,7 +286,7 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
         </div>
       </Card>
 
-      <div ref={resultsRef}>
+      <div ref={resultsRef} className="space-y-6">
         <Card className="rounded-[28px] p-6">
           <div className="space-y-4">
             <div>
@@ -226,29 +296,28 @@ export default function StoreLocator({ userEmail }: StoreLocatorProps) {
               <h3 className="mt-1 text-lg font-bold text-slate-900">
                 {originLabel}
               </h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Apenas lojas com vagas disponíveis em um raio de 10 km aparecem
-                na lista.
+              <p className="mt-2 text-sm text-blue-700">
+                Lojas com vagas disponíveis em um raio de 10km.
+              </p>
+              <p className="mt-2 text-sm text-red-600 font-bold">Escolha quantas lojas tiver disponibilidade para atuar e confirme sua seleção ao final da página.
+                <br></br>A loja principal será a mais próxima de sua localização.
               </p>
             </div>
-
-            {hasStores ? (
-              <StoreList
-                stores={stores}
-                loading={isSearching}
-                selectingStoreId={selectingStoreId}
-                onSelect={handleSelectStore}
-              />
-            ) : (
-              <StoreList
-                stores={[]}
-                loading={isSearching}
-                selectingStoreId={selectingStoreId}
-                onSelect={handleSelectStore}
-              />
-            )}
+            <StoreList
+              stores={hasStores ? stores : []}
+              loading={isSearching}
+              selectedStoreIds={selectedStoreIds}
+              onToggleSelect={handleToggleStore}
+            />
           </div>
         </Card>
+
+        <SelectedStoreSummary
+          stores={selectedStores}
+          primaryStore={primarySelectedStore}
+          onConfirm={handleConfirmSelection}
+          loading={isSubmittingSelection}
+        />
       </div>
     </div>
   );

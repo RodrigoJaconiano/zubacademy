@@ -25,7 +25,8 @@ export default function CepSearchForm({
             Buscar por CEP
           </p>
           <p className="mt-1 text-sm text-slate-600">
-            Digite seu CEP para encontrarmos a loja mais próxima.
+            Digite seu CEP para encontrarmos lojas próximas com vagas
+            disponíveis.
           </p>
         </div>
 

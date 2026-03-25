@@ -6,15 +6,15 @@ import StoreCard from "@/components/store/StoreCard";
 type StoreListProps = {
   stores: NearbyStore[];
   loading?: boolean;
-  selectingStoreId?: string | null;
-  onSelect: (storeId: string) => void;
+  selectedStoreIds: string[];
+  onToggleSelect: (storeId: string) => void;
 };
 
 export default function StoreList({
   stores,
   loading = false,
-  selectingStoreId = null,
-  onSelect,
+  selectedStoreIds,
+  onToggleSelect,
 }: StoreListProps) {
   if (loading) {
     return (
@@ -27,7 +27,7 @@ export default function StoreList({
   if (!stores.length) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
-        Nenhuma loja com vagas foi encontrada para essa região.
+        Nenhuma loja com vagas disponíveis foi encontrada para essa região.
       </div>
     );
   }
@@ -38,8 +38,8 @@ export default function StoreList({
         <StoreCard
           key={store.id}
           store={store}
-          selecting={selectingStoreId === store.id}
-          onSelect={onSelect}
+          selected={selectedStoreIds.includes(store.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>

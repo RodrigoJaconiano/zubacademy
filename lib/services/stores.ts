@@ -28,13 +28,17 @@ export type NearbyStoresResponse = {
   origin: Coordinates | null;
 };
 
-export type SelectStoreResponse = {
+export type SelectStoresResponse = {
   success: boolean;
   message: string;
-  store?: {
+  primaryStore?: {
     id: string;
     name: string;
   };
+  secondaryStores?: Array<{
+    id: string;
+    name: string;
+  }>;
 };
 
 const MAX_DISTANCE_KM = 10;
@@ -107,6 +111,42 @@ export function mapStoresByDistance(
     });
 }
 
+async function geocodeQuery(query: string): Promise<Coordinates | null> {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${encodeURIComponent(
+      query
+    )}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "User-Agent": "Zubacademy/1.0",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Não foi possível converter o CEP em localização.");
+  }
+
+  const data = (await response.json()) as Array<{
+    lat?: string;
+    lon?: string;
+  }>;
+
+  const firstResult = data[0];
+
+  if (!firstResult?.lat || !firstResult?.lon) {
+    return null;
+  }
+
+  return {
+    latitude: Number(firstResult.lat),
+    longitude: Number(firstResult.lon),
+  };
+}
+
 export async function resolveCoordinatesFromCep(cep: string): Promise<{
   coordinates: Coordinates;
   label: string;
@@ -142,52 +182,37 @@ export async function resolveCoordinatesFromCep(cep: string): Promise<{
     throw new Error("CEP não encontrado.");
   }
 
-  const query = [
-    viaCepData.logradouro,
-    viaCepData.bairro,
-    viaCepData.localidade,
-    viaCepData.uf,
-    "Brasil",
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const queries = [
+    [
+      viaCepData.logradouro,
+      viaCepData.bairro,
+      viaCepData.localidade,
+      viaCepData.uf,
+      "Brasil",
+    ]
+      .filter(Boolean)
+      .join(", "),
+    [viaCepData.bairro, viaCepData.localidade, viaCepData.uf, "Brasil"]
+      .filter(Boolean)
+      .join(", "),
+    [viaCepData.localidade, viaCepData.uf, "Brasil"].filter(Boolean).join(", "),
+    [viaCepData.cep, viaCepData.localidade, viaCepData.uf, "Brasil"]
+      .filter(Boolean)
+      .join(", "),
+  ].filter(Boolean);
 
-  const geocodeResponse = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(
-      query
-    )}`,
-    {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        "User-Agent": "Zubacademy/1.0",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-      },
+  for (const query of queries) {
+    const coordinates = await geocodeQuery(query);
+
+    if (coordinates) {
+      return {
+        coordinates,
+        label: `${viaCepData.localidade} - ${viaCepData.uf}`,
+      };
     }
-  );
-
-  if (!geocodeResponse.ok) {
-    throw new Error("Não foi possível converter o CEP em localização.");
   }
 
-  const geocodeData = (await geocodeResponse.json()) as Array<{
-    lat?: string;
-    lon?: string;
-  }>;
-
-  const firstResult = geocodeData[0];
-
-  if (!firstResult?.lat || !firstResult?.lon) {
-    throw new Error("Não encontramos lojas para essa região.");
-  }
-
-  return {
-    coordinates: {
-      latitude: Number(firstResult.lat),
-      longitude: Number(firstResult.lon),
-    },
-    label: `${viaCepData.localidade} - ${viaCepData.uf}`,
-  };
+  throw new Error("Não encontramos lojas disponíveis para essa região.");
 }
 
 export async function fetchNearbyStores(params: {
@@ -207,31 +232,35 @@ export async function fetchNearbyStores(params: {
 
   if (!response.ok) {
     throw new Error(
-      getErrorMessage(data, "Não foi possível buscar as lojas.")
+      getErrorMessage(data, "Não foi possível buscar as lojas disponíveis.")
     );
   }
 
   return data as NearbyStoresResponse;
 }
 
-export async function selectStore(
-  storeId: string
-): Promise<SelectStoreResponse> {
+export async function selectStores(params: {
+  storeIds: string[];
+  origin: Coordinates;
+}): Promise<SelectStoresResponse> {
   const response = await fetch("/api/stores/select", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ storeId }),
+    body: JSON.stringify(params),
   });
 
   const data: unknown = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      getErrorMessage(data, "Não foi possível selecionar a loja.")
+      getErrorMessage(
+        data,
+        "Não foi possível salvar a seleção das lojas."
+      )
     );
   }
 
-  return data as SelectStoreResponse;
+  return data as SelectStoresResponse;
 }

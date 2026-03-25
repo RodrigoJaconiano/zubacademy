@@ -47,6 +47,12 @@ type LessonProgressRow = {
   id: string;
 };
 
+type StoreApplicationRow = {
+  id: string;
+  is_primary?: boolean | null;
+  store_id?: string | null;
+};
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -63,6 +69,7 @@ export default async function DashboardPage() {
     { data: rawProfile, error: profileError },
     { data: certificateData, error: certificateError },
     { data: quizAttemptData, error: quizError },
+    { data: applications, error: applicationsError },
   ] = await Promise.all([
     supabase
       .from("lesson_progress")
@@ -94,13 +101,26 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle<QuizAttemptRow>(),
+
+    supabase
+      .from("store_applications")
+      .select("id, is_primary, store_id")
+      .eq("user_id", user.id)
+      .returns<StoreApplicationRow[]>(),
   ]);
 
-  if (progressError || profileError || certificateError || quizError) {
+  if (
+    progressError ||
+    profileError ||
+    certificateError ||
+    quizError ||
+    applicationsError
+  ) {
     console.error("progressError:", progressError);
     console.error("profileError:", profileError);
     console.error("certificateError:", certificateError);
     console.error("quizError:", quizError);
+    console.error("applicationsError:", applicationsError);
 
     return (
       <PageContainer>
@@ -119,8 +139,12 @@ export default async function DashboardPage() {
   }
 
   const profileRow = rawProfile ?? null;
+  const primaryApplication =
+    applications?.find((application) => application.is_primary) ?? null;
 
-  const hasSelectedStore = Boolean(profileRow?.store_id);
+  const hasSelectedStore = Boolean(
+    profileRow?.store_id || primaryApplication?.store_id
+  );
 
   if (!hasSelectedStore) {
     redirect("/unidade");
@@ -174,7 +198,7 @@ export default async function DashboardPage() {
           <div>
             <SectionHeading
               eyebrow="Painel do aluno"
-              title="Boas vindas!"
+              title="Boas-vindas!"
               description="Acompanhe seu progresso, continue as aulas e avance para a certificação."
             />
 

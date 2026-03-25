@@ -25,6 +25,10 @@ type RawProfileRow = {
   store_id?: string | null;
 };
 
+type StoreApplicationRow = {
+  id: string;
+};
+
 export default async function UnidadePage() {
   const supabase = await createClient();
 
@@ -36,15 +40,24 @@ export default async function UnidadePage() {
     redirect("/login");
   }
 
-  const { data: rawProfile, error } = await supabase
-    .from("profiles")
-    .select(
-      "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
-    )
-    .eq("id", user.id)
-    .maybeSingle<RawProfileRow>();
+  const [{ data: rawProfile, error: profileError }, { data: applications, error: applicationsError }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+        )
+        .eq("id", user.id)
+        .maybeSingle<RawProfileRow>(),
+      supabase
+        .from("store_applications")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1)
+        .returns<StoreApplicationRow[]>(),
+    ]);
 
-  if (error) {
+  if (profileError || applicationsError) {
     return (
       <PageContainer>
         <PageState
@@ -75,7 +88,8 @@ export default async function UnidadePage() {
   const missingProfileFields = getMissingProfileFields(profile);
   const profileIncomplete = missingProfileFields.length > 0;
   const termsAccepted = Boolean(rawProfile?.terms_accepted);
-  const hasSelectedStore = Boolean(rawProfile?.store_id);
+  const hasSelectedStore =
+    Boolean(rawProfile?.store_id) || (applications?.length ?? 0) > 0;
 
   if (hasSelectedStore) {
     redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
@@ -86,8 +100,8 @@ export default async function UnidadePage() {
       <div className="space-y-8">
         <SectionHeading
           eyebrow="Seleção de loja"
-          title="Escolha sua unidade"
-          description="Use sua localização ou informe seu CEP para encontrar a loja com vagas disponíveis mais próxima de você."
+          title="Escolha suas unidades"
+          description="Use sua localização ou informe seu CEP para encontrar lojas com vagas disponíveis próximas de você. A loja principal será definida automaticamente como a mais próxima entre as selecionadas."
         />
 
         <StoreLocator userEmail={user.email ?? null} />

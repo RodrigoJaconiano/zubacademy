@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ClipboardEvent,
+  FormEvent,
+  KeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -27,6 +32,12 @@ type RawProfileRow = {
   address?: string | null;
   number?: string | number | null;
   terms_accepted?: boolean | null;
+  store_id?: string | null;
+};
+
+type StoreApplicationRow = {
+  id: string;
+  is_primary?: boolean | null;
   store_id?: string | null;
 };
 
@@ -62,16 +73,27 @@ export default function LoginPage() {
       return;
     }
 
-    const { data: rawProfile, error: profileError } = await supabase
-      .from("profiles")
-      .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
-      )
-      .eq("id", user.id)
-      .maybeSingle<RawProfileRow>();
+    const [{ data: rawProfile, error: profileError }, { data: applications, error: applicationsError }] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+          )
+          .eq("id", user.id)
+          .maybeSingle<RawProfileRow>(),
+        supabase
+          .from("store_applications")
+          .select("id, is_primary, store_id")
+          .eq("user_id", user.id)
+          .returns<StoreApplicationRow[]>(),
+      ]);
 
-    if (profileError) {
-      console.error("Erro ao buscar perfil no login:", profileError);
+    if (profileError || applicationsError) {
+      console.error("Erro ao buscar dados do usuário no login:", {
+        profileError,
+        applicationsError,
+      });
       setCheckingSession(false);
       router.replace("/dashboard");
       return;
@@ -96,7 +118,13 @@ export default function LoginPage() {
     const missingProfileFields = getMissingProfileFields(profile);
     const profileIncomplete = missingProfileFields.length > 0;
     const termsAccepted = Boolean(rawProfile?.terms_accepted);
-    const hasSelectedStore = Boolean(rawProfile?.store_id);
+
+    const primaryApplication =
+      applications?.find((application) => application.is_primary) ?? null;
+
+    const hasSelectedStore = Boolean(
+      rawProfile?.store_id || primaryApplication?.store_id
+    );
 
     setCheckingSession(false);
 
@@ -224,10 +252,7 @@ export default function LoginPage() {
     }
   }
 
-  function handleOtpKeyDown(
-    index: number,
-    event: React.KeyboardEvent<HTMLInputElement>
-  ) {
+  function handleOtpKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Backspace") {
       if (otpValues[index]) {
         const nextValues = [...otpValues];
@@ -253,7 +278,7 @@ export default function LoginPage() {
     }
   }
 
-  function handleOtpPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+  function handleOtpPaste(event: ClipboardEvent<HTMLInputElement>) {
     event.preventDefault();
 
     const pasted = event.clipboardData
@@ -269,7 +294,7 @@ export default function LoginPage() {
     focusOtpIndex(nextFocusIndex);
   }
 
-  async function handleSendCode(e: React.FormEvent) {
+  async function handleSendCode(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMessage("");
@@ -296,7 +321,7 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  async function handleVerifyCode(e: React.FormEvent) {
+  async function handleVerifyCode(e: FormEvent) {
     e.preventDefault();
 
     if (token.length !== 6) {

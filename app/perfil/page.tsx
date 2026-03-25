@@ -29,6 +29,12 @@ type StoreRow = {
   name?: string | null;
 };
 
+type StoreApplicationRow = {
+  id: string;
+  is_primary?: boolean | null;
+  store_id?: string | null;
+};
+
 export default async function PerfilPage() {
   const supabase = await createClient();
 
@@ -50,15 +56,25 @@ export default async function PerfilPage() {
     );
   }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select(
-      "name, phone, email, cpf, cep, city, state, address, number, terms_accepted, terms_accepted_at, terms_version, store_id, store_selected_at"
-    )
-    .eq("id", user.id)
-    .maybeSingle<ProfileRow>();
+  const [
+    { data: profile, error: profileError },
+    { data: applications, error: applicationsError },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "name, phone, email, cpf, cep, city, state, address, number, terms_accepted, terms_accepted_at, terms_version, store_id, store_selected_at"
+      )
+      .eq("id", user.id)
+      .maybeSingle<ProfileRow>(),
+    supabase
+      .from("store_applications")
+      .select("id, is_primary, store_id")
+      .eq("user_id", user.id)
+      .returns<StoreApplicationRow[]>(),
+  ]);
 
-  if (error) {
+  if (profileError || applicationsError) {
     return (
       <PageContainer>
         <PageState
@@ -70,14 +86,19 @@ export default async function PerfilPage() {
     );
   }
 
-  if (!profile?.store_id) {
+  const primaryApplication =
+    applications?.find((application) => application.is_primary) ?? null;
+
+  const primaryStoreId = profile?.store_id ?? primaryApplication?.store_id ?? null;
+
+  if (!primaryStoreId) {
     redirect("/unidade");
   }
 
   const { data: store, error: storeError } = await supabase
     .from("stores")
     .select("id, name")
-    .eq("id", profile.store_id)
+    .eq("id", primaryStoreId)
     .maybeSingle<StoreRow>();
 
   if (storeError) {
@@ -85,7 +106,7 @@ export default async function PerfilPage() {
       <PageContainer>
         <PageState
           eyebrow="Perfil"
-          title="Erro ao carregar loja selecionada"
+          title="Erro ao carregar loja principal"
           description="Não foi possível carregar a loja vinculada ao seu cadastro neste momento."
         />
       </PageContainer>

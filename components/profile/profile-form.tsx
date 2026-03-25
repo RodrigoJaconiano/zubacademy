@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import Card from "@/components/ui/card";
@@ -9,7 +10,6 @@ import TextMessage from "@/components/ui/text-message";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAddressByCep } from "@/lib/services/cep";
 import TermsModal from "@/components/profile/terms-modal";
-import SelectedStoreSummary from "@/components/store/SelectedStoreSummary";
 
 type ProfileFormProps = {
   userId: string;
@@ -195,7 +195,7 @@ export default function ProfileForm({
     }
   }
 
-  async function handleCepChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCepChange(event: ChangeEvent<HTMLInputElement>) {
     const rawValue = event.target.value;
     const cleanCep = normalizeCep(rawValue);
 
@@ -257,7 +257,7 @@ export default function ProfileForm({
     }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
     setMessage("");
@@ -314,10 +314,27 @@ export default function ProfileForm({
     <>
       <div className="space-y-6">
         {initialStoreName ? (
-          <SelectedStoreSummary
-            storeName={initialStoreName}
-            selectedAt={initialStoreSelectedAt || null}
-          />
+          <Card className="rounded-[28px] border border-blue-100 bg-blue-50/70 p-5">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-blue-700">
+                Loja principal selecionada
+              </p>
+              <h3 className="text-xl font-bold text-slate-900">
+                {initialStoreName}
+              </h3>
+
+              {initialStoreSelectedAt ? (
+                <p className="text-sm text-slate-600">
+                  Seleção registrada em{" "}
+                  {new Date(initialStoreSelectedAt).toLocaleString("pt-BR")}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Esta loja foi vinculada ao seu cadastro como unidade principal.
+                </p>
+              )}
+            </div>
+          </Card>
         ) : null}
 
         <Card className="rounded-[28px] p-6">
@@ -348,7 +365,7 @@ export default function ProfileForm({
               >
                 Telefone{" "}
                 <span className="text-red-500">
-                  <strong>(Mesmo do cadastro no APP)</strong>
+                  <strong>(mesmo do cadastro no app)</strong>
                 </span>
               </label>
               <input
@@ -370,7 +387,7 @@ export default function ProfileForm({
               >
                 E-mail{" "}
                 <span className="text-red-500">
-                  <strong>(Mesmo do cadastro no APP)</strong>
+                  <strong>(mesmo do cadastro no app)</strong>
                 </span>
               </label>
               <input
@@ -494,7 +511,7 @@ export default function ProfileForm({
                   htmlFor="number"
                   className="mb-2 block text-sm font-medium text-slate-700"
                 >
-                  Número *
+                  Número
                 </label>
                 <input
                   id="number"

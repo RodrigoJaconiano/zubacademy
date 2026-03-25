@@ -54,7 +54,12 @@ type DashboardStateInput = {
 type DashboardStep = {
   title: string;
   description: string;
-  badgeLabel: "Cadastro pendente" | "Quiz bloqueado" | "Quiz liberado" | "Quiz concluído" | "Certificado liberado";
+  badgeLabel:
+    | "Cadastro pendente"
+    | "Quiz bloqueado"
+    | "Quiz liberado"
+    | "Quiz concluído"
+    | "Certificado liberado";
   badgeVariant: "success" | "warning" | "info";
 };
 
@@ -93,7 +98,10 @@ export function getDashboardState({
 
   const quizUnlocked = allLessonsCompleted && !profileIncomplete;
   const certificateUnlocked =
-    allLessonsCompleted && !profileIncomplete && quizCompleted && certificateIssued;
+    allLessonsCompleted &&
+    !profileIncomplete &&
+    quizCompleted &&
+    certificateIssued;
 
   const primaryCourseActionLabel =
     completedLessons > 0 ? "Continuar curso" : "Começar curso";
@@ -151,7 +159,12 @@ export function getDashboardState({
     actionHref: profileIncomplete ? "/perfil" : "/certificado",
   };
 
-  if (!profileIncomplete && allLessonsCompleted && quizCompleted && !certificateIssued) {
+  if (
+    !profileIncomplete &&
+    allLessonsCompleted &&
+    quizCompleted &&
+    !certificateIssued
+  ) {
     certificate = {
       description:
         "Seu quiz já foi concluído com sucesso. Agora o sistema precisa emitir o certificado para liberar o acesso.",
@@ -177,17 +190,17 @@ export function getDashboardState({
   const quickQuizLabel = profileIncomplete
     ? "Completar perfil"
     : quizCompleted
-    ? "Quiz concluído"
-    : quizUnlocked
-    ? "Abrir quiz"
-    : "Quiz bloqueado";
+      ? "Quiz concluído"
+      : quizUnlocked
+        ? "Abrir quiz"
+        : "Quiz bloqueado";
 
   const quickCertificateHref = profileIncomplete ? "/perfil" : "/certificado";
   const quickCertificateLabel = profileIncomplete
     ? "Atualizar cadastro"
     : certificateUnlocked
-    ? "Abrir certificado"
-    : "Ver status do certificado";
+      ? "Abrir certificado"
+      : "Ver status do certificado";
 
   return {
     progressPercentage,
