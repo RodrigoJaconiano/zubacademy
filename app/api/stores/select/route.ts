@@ -313,33 +313,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const profilePayload = {
-      id: user.id,
-      email: existingProfile?.email ?? user.email ?? null,
-      name: existingProfile?.name ?? null,
-      phone: existingProfile?.phone ?? null,
-      cpf: existingProfile?.cpf ?? null,
-      cep: existingProfile?.cep ?? null,
-      city: existingProfile?.city ?? null,
-      state: existingProfile?.state ?? null,
-      address: existingProfile?.address ?? null,
-      number:
-        existingProfile?.number === null || existingProfile?.number === undefined
-          ? null
-          : String(existingProfile.number),
-      terms_accepted: existingProfile?.terms_accepted ?? false,
-      store_id: primaryStore.id,
-      store_selected_at: now,
-      updated_at: now,
-    };
+      const profilePayload = {
+        id: user.id,
+        email: user.email ?? null,
+        store_id: primaryStore.id,
+        store_selected_at: now,
+        updated_at: now,
+      };
 
-    const { data: savedProfile, error: upsertProfileError } = await adminSupabase
-      .from("profiles")
-      .upsert(profilePayload, { onConflict: "id" })
-      .select(
-        "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
-      )
-      .maybeSingle<ProfileRow>();
+      const { data: savedProfile, error: upsertProfileError } = await adminSupabase
+        .from("profiles")
+        .upsert(profilePayload, { onConflict: "id" })
+        .select(
+          "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+        )
+        .maybeSingle<ProfileRow>();
 
     if (upsertProfileError) {
       console.error(
