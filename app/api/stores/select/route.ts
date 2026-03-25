@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { calculateDistanceKm, type Coordinates } from "@/lib/utils/distance";
-import { getMissingProfileFields, type ProfileData } from "@/lib/utils/progress";
+import {
+  getMissingProfileFields,
+  type ProfileData,
+} from "@/lib/utils/progress";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +40,8 @@ type ProfileRow = {
   number?: string | number | null;
   terms_accepted?: boolean | null;
   store_id?: string | null;
+  primary_store_name?: string | null;
+  secondary_store_names?: string | null;
 };
 
 function isValidCoordinate(value: unknown): value is number {
@@ -125,21 +130,23 @@ export async function POST(request: Request) {
 
     const adminSupabase = createAdminClient();
 
-    const [{ data: existingProfile, error: profileError }, { data: existingApplications, error: applicationsError }] =
-      await Promise.all([
-        adminSupabase
-          .from("profiles")
-          .select(
-            "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
-          )
-          .eq("id", user.id)
-          .maybeSingle<ProfileRow>(),
-        adminSupabase
-          .from("store_applications")
-          .select("id")
-          .eq("user_id", user.id)
-          .limit(1),
-      ]);
+    const [
+      { data: existingProfile, error: profileError },
+      { data: existingApplications, error: applicationsError },
+    ] = await Promise.all([
+      adminSupabase
+        .from("profiles")
+        .select(
+          "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id, primary_store_name, secondary_store_names"
+        )
+        .eq("id", user.id)
+        .maybeSingle<ProfileRow>(),
+      adminSupabase
+        .from("store_applications")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1),
+    ]);
 
     if (profileError) {
       console.error("Erro ao buscar perfil antes da seleção:", profileError);
@@ -241,6 +248,12 @@ export async function POST(request: Request) {
       .sort((a, b) => a.distanceKm - b.distanceKm);
 
     const primaryStore = storesWithDistance[0];
+    const primaryStoreName = primaryStore.name;
+    const secondaryStoreNames = storesWithDistance
+      .filter((store) => store.id !== primaryStore.id)
+      .map((store) => store.name)
+      .join(", ");
+
     const now = new Date().toISOString();
 
     const { data: updatedPrimaryRows, error: updatePrimaryError } =
@@ -313,27 +326,31 @@ export async function POST(request: Request) {
       );
     }
 
-      const profilePayload = {
-        id: user.id,
-        email: user.email ?? null,
-        store_id: primaryStore.id,
-        store_selected_at: now,
-        updated_at: now,
-      };
+    const profilePayload = {
+      id: user.id,
+      email: user.email ?? null,
+      store_id: primaryStore.id,
+      primary_store_name: primaryStoreName,
+      secondary_store_names: secondaryStoreNames || null,
+      store_selected_at: now,
+      updated_at: now,
+    };
 
-      const { data: savedProfile, error: upsertProfileError } = await adminSupabase
-        .from("profiles")
-        .upsert(profilePayload, { onConflict: "id" })
-        .select(
-          "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
-        )
-        .maybeSingle<ProfileRow>();
+    const { data: savedProfile, error: upsertProfileError } = await adminSupabase
+      .from("profiles")
+      .upsert(profilePayload, { onConflict: "id" })
+      .select(
+        "id, email, name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id, primary_store_name, secondary_store_names"
+      )
+      .maybeSingle<ProfileRow>();
 
     if (upsertProfileError) {
-      console.error(
-        "Erro ao salvar a loja principal no perfil:",
-        upsertProfileError
-      );
+      console.error("Erro ao salvar a loja principal no perfil:", {
+        message: upsertProfileError.message,
+        details: upsertProfileError.details,
+        hint: upsertProfileError.hint,
+        code: upsertProfileError.code,
+      });
 
       await adminSupabase
         .from("store_applications")
@@ -363,7 +380,7 @@ export async function POST(request: Request) {
       success: true,
       alreadySelected: false,
       message: "Lojas selecionadas com sucesso.",
-      redirectTo: getRedirectTo(savedProfile ?? profilePayload),
+      redirectTo: getRedirectTo(savedProfile ?? null),
       primaryStore: {
         id: primaryStore.id,
         name: primaryStore.name,
