@@ -11,15 +11,17 @@ import {
   YAxis,
 } from "recharts";
 import Card from "@/components/ui/card";
-import type { AdminCertificate, AdminUser } from "./AdminDashboard";
+import type { AdminCertificate, AdminStoreMetric, AdminUser } from "@/lib/admin/types";
 
 type Props = {
   users: AdminUser[];
   certificates: AdminCertificate[];
+  stores: AdminStoreMetric[];
 };
 
-const USER_BAR_COLOR = "#93c5fd"; // azul claro
-const SUCCESS_BAR_COLOR = "#86efac"; // verde claro
+const USER_BAR_COLOR = "#93c5fd";
+const SUCCESS_BAR_COLOR = "#86efac";
+const STORE_BAR_COLOR = "#fcd34d";
 
 function getMonthKey(dateString?: string | null) {
   if (!dateString || dateString.length < 7) return null;
@@ -105,36 +107,86 @@ function groupCertificatesByMonth(certificates: AdminCertificate[]) {
     }));
 }
 
-function groupCertificatesByDay(certificates: AdminCertificate[]) {
-  const map = new Map<string, number>();
-
-  certificates.forEach((certificate) => {
-    const key = getDayKey(certificate.issued_at);
-    if (!key) return;
-    map.set(key, (map.get(key) ?? 0) + 1);
-  });
-
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, total]) => ({
-      key,
-      label: formatDayLabel(key),
-      total,
+function buildStoreSelectionChart(stores: AdminStoreMetric[]) {
+  return [...stores]
+    .sort((a, b) => b.selectedUsers - a.selectedUsers)
+    .slice(0, 10)
+    .map((store) => ({
+      label: store.storeName,
+      total: store.selectedUsers,
     }));
 }
 
-export default function AdminCharts({ users, certificates }: Props) {
-  const usersByMonth = useMemo(() => groupUsersByMonth(users), [users]);
+function splitLabelIntoLines(label: string, maxCharsPerLine = 12) {
+  const words = label.trim().split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = "";
 
+  for (const word of words) {
+    const next = currentLine ? `${currentLine} ${word}` : word;
+
+    if (next.length <= maxCharsPerLine) {
+      currentLine = next;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      currentLine = word;
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.slice(0, 3);
+}
+
+type MultilineYAxisTickProps = {
+  x?: number;
+  y?: number;
+  payload?: {
+    value?: string;
+  };
+};
+
+function MultilineYAxisTick({
+  x = 0,
+  y = 0,
+  payload,
+}: MultilineYAxisTickProps) {
+  const value = payload?.value ?? "";
+  const lines = splitLabelIntoLines(value, 12);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        textAnchor="end"
+        fill="#475569"
+        fontSize={12}
+      >
+        {lines.map((line, index) => (
+          <tspan
+            key={`${line}-${index}`}
+            x={0}
+            dy={index === 0 ? -6 : 14}
+          >
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+}
+
+export default function AdminCharts({ users, certificates, stores }: Props) {
+  const usersByMonth = useMemo(() => groupUsersByMonth(users), [users]);
   const usersByDay = useMemo(() => groupUsersByDay(users), [users]);
 
   const certificatesByMonth = useMemo(
     () => groupCertificatesByMonth(certificates),
-    [certificates]
-  );
-
-  const certificatesByDay = useMemo(
-    () => groupCertificatesByDay(certificates),
     [certificates]
   );
 
@@ -158,6 +210,10 @@ export default function AdminCharts({ users, certificates }: Props) {
     return ranges;
   }, [users]);
 
+  const storesBySelection = useMemo(() => buildStoreSelectionChart(stores), [stores]);
+
+  const storesChartHeight = Math.max(360, storesBySelection.length * 52);
+
   return (
     <section className="grid gap-4 xl:grid-cols-3">
       <Card className="rounded-2xl border-slate-200 xl:col-span-2">
@@ -173,11 +229,7 @@ export default function AdminCharts({ users, certificates }: Props) {
                 <XAxis dataKey="label" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar
-                  dataKey="total"
-                  fill={USER_BAR_COLOR}
-                  radius={[8, 8, 0, 0]}
-                />
+                <Bar dataKey="total" fill={USER_BAR_COLOR} radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -197,11 +249,7 @@ export default function AdminCharts({ users, certificates }: Props) {
                 <XAxis dataKey="label" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar
-                  dataKey="total"
-                  fill={SUCCESS_BAR_COLOR}
-                  radius={[8, 8, 0, 0]}
-                />
+                <Bar dataKey="total" fill={SUCCESS_BAR_COLOR} radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -221,61 +269,70 @@ export default function AdminCharts({ users, certificates }: Props) {
                 <XAxis dataKey="label" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar
-                  dataKey="total"
-                  fill={USER_BAR_COLOR}
-                  radius={[8, 8, 0, 0]}
-                />
+                <Bar dataKey="total" fill={USER_BAR_COLOR} radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </Card>
 
-      <Card className="rounded-2xl border-slate-200 xl:col-span-3">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Certificados emitidos por mês
-            </h2>
+      <Card className="rounded-2xl border-slate-200 xl:col-span-2">
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Certificados emitidos por mês
+          </h2>
 
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={certificatesByMonth}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar
-                    dataKey="total"
-                    fill={SUCCESS_BAR_COLOR}
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={certificatesByMonth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="total" fill={SUCCESS_BAR_COLOR} radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
+        </div>
+      </Card>
 
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Certificados emitidos por dia
-            </h2>
+      <Card className="rounded-2xl border-slate-200 xl:col-span-1">
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-slate-900">
+            Top 10 lojas por seleção
+          </h2>
 
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={certificatesByDay}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar
-                    dataKey="total"
-                    fill={SUCCESS_BAR_COLOR}
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div style={{ height: storesChartHeight }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={storesBySelection}
+                layout="vertical"
+                margin={{ top: 8, right: 16, bottom: 8, left: 20 }}
+                barCategoryGap={14}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={110}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  tick={<MultilineYAxisTick />}
+                />
+                <Tooltip
+                  formatter={(value) => [`${value}`, "Total"]}
+                  labelFormatter={(label) => `Loja: ${label}`}
+                />
+                <Bar
+                  dataKey="total"
+                  fill={STORE_BAR_COLOR}
+                  radius={[0, 8, 8, 0]}
+                  barSize={24}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </Card>

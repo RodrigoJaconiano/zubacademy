@@ -1,45 +1,24 @@
 import Card from "@/components/ui/card";
-import type { AdminCertificate, AdminUser } from "./AdminDashboard";
+import type { AdminSummary } from "@/lib/admin/types";
 
 type Props = {
-  users: AdminUser[];
-  certificates: AdminCertificate[];
+  summary: AdminSummary;
 };
 
-export default function AdminStatsCards({ users, certificates }: Props) {
-  const totalUsers = users.length;
-
-  const completedProfiles = users.filter((user) => user.isComplete).length;
-
-  const averageProgress =
-    totalUsers > 0
-      ? Math.round(
-          users.reduce((acc, user) => acc + user.progress, 0) / totalUsers
-        )
-      : 0;
-
-  const approvedUsers = users.filter((user) => user.quizPassed).length;
-
-  const uniqueCertifiedUsers = new Set(
-    certificates.map((certificate) => certificate.user_id).filter(Boolean)
-  ).size;
-
-  const adminUsers = users.filter((user) => {
-    return user.app_role?.toLowerCase() === "admin";
-  }).length;
-
+export default function AdminStatsCards({ summary }: Props) {
   const items = [
-    { label: "Total de usuários", value: totalUsers },
-    { label: "Perfis completos", value: completedProfiles },
-    { label: "Progresso médio", value: `${averageProgress}%` },
-    { label: "Aprovados no quiz", value: approvedUsers },
-    { label: "Certificados emitidos", value: certificates.length },
-    { label: "Usuários certificados", value: uniqueCertifiedUsers },
-    { label: "Admins por role", value: adminUsers },
+    { label: "Total de usuários", value: summary.totalUsers },
+    { label: "Perfis completos", value: summary.completedProfiles },
+    { label: "Progresso médio", value: `${summary.averageProgress}%` },
+    { label: "Aprovados no quiz", value: summary.approvedUsers },
+    { label: "Certificados emitidos", value: summary.certificatesIssued },
+    { label: "Usuários certificados", value: summary.uniqueCertifiedUsers },
+    { label: "Admins por role", value: summary.adminUsers },
+    { label: "Com unidade selecionada", value: summary.usersWithStoreSelection },
   ];
 
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
       {items.map((item) => (
         <Card key={item.label} className="rounded-2xl border-slate-200">
           <div className="space-y-3">

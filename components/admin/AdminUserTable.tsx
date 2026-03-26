@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Card from "@/components/ui/card";
 import Button from "@/components/ui/Button";
-import type { AdminUser } from "./AdminDashboard";
+import type { AdminUser } from "@/lib/admin/types";
 
 type Props = {
   users: AdminUser[];
@@ -41,7 +41,7 @@ function IncompleteProfileBadge({ missingItems }: { missingItems: string[] }) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (missingItems.length === 0) {
-    return <span className="text-slate-600">Completo</span>;
+    return <span className="text-emerald-700 font-medium">Completo</span>;
   }
 
   return (
@@ -88,28 +88,110 @@ function IncompleteProfileBadge({ missingItems }: { missingItems: string[] }) {
 
 export default function AdminUsersTable({ users }: Props) {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [profileFilter, setProfileFilter] = useState("all");
+  const [storeFilter, setStoreFilter] = useState("all");
 
-  const totalPages = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const matchesSearch =
+        !term ||
+        user.name?.toLowerCase().includes(term) ||
+        user.email?.toLowerCase().includes(term) ||
+        user.cpf?.toLowerCase().includes(term);
+
+      const matchesProfile =
+        profileFilter === "all" ||
+        (profileFilter === "complete" && user.isComplete) ||
+        (profileFilter === "incomplete" && !user.isComplete);
+
+      const matchesStore =
+        storeFilter === "all" ||
+        (storeFilter === "with-store" && user.hasStoreSelection) ||
+        (storeFilter === "without-store" && !user.hasStoreSelection);
+
+      return Boolean(matchesSearch && matchesProfile && matchesStore);
+    });
+  }, [profileFilter, search, storeFilter, users]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
 
   const paginatedUsers = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return users.slice(start, start + PAGE_SIZE);
-  }, [page, users]);
+    return filteredUsers.slice(start, start + PAGE_SIZE);
+  }, [filteredUsers, page]);
 
   return (
     <Card className="rounded-2xl border-slate-200">
       <div className="space-y-5">
-        <div className="flex flex-row items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Usuários</h2>
-            <p className="text-sm text-slate-500">
-              Página {page} de {totalPages}
-            </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Usuários</h2>
+              <p className="text-sm text-slate-500">
+                Página {page} de {totalPages}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">
+                Buscar usuário
+              </label>
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Nome, email ou CPF"
+                className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:border-slate-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">
+                Perfil
+              </label>
+              <select
+                value={profileFilter}
+                onChange={(event) => {
+                  setProfileFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:border-slate-400"
+              >
+                <option value="all">Todos</option>
+                <option value="complete">Completo</option>
+                <option value="incomplete">Incompleto</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">
+                Unidade
+              </label>
+              <select
+                value={storeFilter}
+                onChange={(event) => {
+                  setStoreFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:border-slate-400"
+              >
+                <option value="all">Todos</option>
+                <option value="with-store">Com unidade</option>
+                <option value="without-store">Sem unidade</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px] border-collapse text-sm">
+          <table className="w-full min-w-[1500px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left">
                 <th className="py-3 pr-4 font-semibold text-slate-600">Nome</th>
@@ -118,6 +200,9 @@ export default function AdminUsersTable({ users }: Props) {
                 <th className="py-3 pr-4 font-semibold text-slate-600">Telefone</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Role</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Perfil</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Unidade primária</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Secundárias</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Selecionada em</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Progresso</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Quiz</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Tentativas</th>
@@ -138,6 +223,17 @@ export default function AdminUsersTable({ users }: Props) {
                     <IncompleteProfileBadge missingItems={user.missingItems} />
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
+                    {user.primaryStoreName || "-"}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">
+                    {user.secondaryStoreNames.length > 0
+                      ? user.secondaryStoreNames.join(", ")
+                      : "-"}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">
+                    {formatDate(user.storeSelectedAt)}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">
                     {user.progress}% ({user.completedLessons}/{user.totalLessons})
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
@@ -155,7 +251,7 @@ export default function AdminUsersTable({ users }: Props) {
 
               {paginatedUsers.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-slate-500">
+                  <td colSpan={14} className="py-8 text-center text-slate-500">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
