@@ -1,6 +1,11 @@
 import { Course, QuizQuestion } from "@/types";
 
 /**
+ * Quantidade de perguntas que o quiz deve ter
+ */
+const QUIZ_LENGTH = 10;
+
+/**
  * Função para embaralhar array (Fisher-Yates)
  */
 function shuffleArray<T>(array: T[]): T[] {
@@ -13,13 +18,15 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 /**
- * Embaralha perguntas e também as opções
+ * Embaralha perguntas, limita quantidade e embaralha opções
  */
 export function getShuffledQuiz(): QuizQuestion[] {
-  return shuffleArray(quizQuestions).map((q) => ({
-    ...q,
-    options: shuffleArray(q.options),
-  }));
+  return shuffleArray(quizQuestions)
+    .slice(0, QUIZ_LENGTH) // 👈 limita para 10 perguntas
+    .map((q) => ({
+      ...q,
+      options: shuffleArray(q.options),
+    }));
 }
 
 export const courseData: Course = {
@@ -41,6 +48,13 @@ export const courseData: Course = {
       description: "Como separar itens com atenção, precisão e organização.",
       videoId: "05Y2ku4Dnrs",
       order: 2,
+    },
+        {
+      id: "aula-3",
+      title: "Detalhes técnicos e casos de uso",
+      description: "Tudo que você precisa saber para iniciar na operação.",
+      videoId: "PyN0Wug0bpk",
+      order: 3,
     },
   ],
 };
@@ -81,7 +95,8 @@ export const quizQuestions: QuizQuestion[] = [
   },
   {
     id: "q4",
-    question: "Se o código de barras não for lido corretamente, o que deve ser feito?",
+    question:
+      "Se o código de barras não for lido corretamente, o que deve ser feito?",
     options: [
       "Pular o item",
       "Digitar o código manualmente ou validar corretamente",
@@ -114,7 +129,8 @@ export const quizQuestions: QuizQuestion[] = [
   },
   {
     id: "q7",
-    question: "Por que os itens pesáveis devem ser separados por último?",
+    question:
+      "Por que os itens pesáveis devem ser separados por último?",
     options: [
       "Para economizar tempo",
       "Para manter a qualidade e frescor",

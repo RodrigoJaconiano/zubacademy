@@ -3,7 +3,7 @@ import PageContainer from "@/components/ui/page-container";
 import PageState from "@/components/ui/page-state";
 import QuizClient from "@/components/quiz/QuizClient";
 import { createClient } from "@/lib/supabase/server";
-import { courseData, quizQuestions } from "@/lib/data/course";
+import { courseData, getShuffledQuiz } from "@/lib/data/course";
 import {
   getMissingProfileFields,
   type ProfileData,
@@ -169,7 +169,7 @@ export default async function QuizPage() {
   return (
     <PageContainer>
       <QuizClient
-        questions={quizQuestions}
+        questions={getShuffledQuiz()}
         initialAttempt={latestAttempt ?? null}
         certificateIssued={Boolean(certificate?.id)}
       />
