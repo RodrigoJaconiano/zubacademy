@@ -1,9 +1,10 @@
-import { redirect } from "next/navigation";
 import PageContainer from "@/components/ui/page-container";
 import PageState from "@/components/ui/page-state";
 import CertificatePreview from "@/components/certificate/CertificatePreview";
 import CertificateActions from "@/components/certificate/CertificateActions";
+import CertificateUnlockVideo from "@/components/certificate/CertificateUnlockVideo";
 import { createClient } from "@/lib/supabase/server";
+import { certificateUnlockVideo, courseData } from "@/lib/data/course";
 import {
   getMissingProfileFields,
   type ProfileData,
@@ -24,6 +25,25 @@ type RawProfileRow = {
   address?: string | null;
   number?: string | number | null;
   terms_accepted?: boolean | null;
+  certificate_video_watched?: boolean | null;
+};
+
+type QuizAttemptRow = {
+  id: string;
+  score?: number | null;
+  passed?: boolean | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+};
+
+type CertificateRow = {
+  certificate_code?: string | null;
+  issued_at?: string | null;
+  course_slug?: string | null;
+};
+
+type LessonProgressRow = {
+  id: string;
 };
 
 function formatDate(dateString: string) {
@@ -58,11 +78,16 @@ export default async function CertificadoPage() {
     );
   }
 
-  const [profileResponse, certificateResponse] = await Promise.all([
+  const [
+    profileResponse,
+    certificateResponse,
+    progressResponse,
+    quizResponse,
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted"
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, certificate_video_watched"
       )
       .eq("id", user.id)
       .maybeSingle(),
@@ -71,11 +96,26 @@ export default async function CertificadoPage() {
       .select("certificate_code, issued_at, course_slug")
       .eq("user_id", user.id)
       .eq("course_slug", COURSE_SLUG)
-      .maybeSingle(),
+      .maybeSingle<CertificateRow>(),
+    supabase
+      .from("lesson_progress")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("completed", true)
+      .returns<LessonProgressRow[]>(),
+    supabase
+      .from("quiz_attempts")
+      .select("id, score, passed, completed_at, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<QuizAttemptRow>(),
   ]);
 
   const { data: rawProfile, error: profileError } = profileResponse;
   const { data: certificate, error: certificateError } = certificateResponse;
+  const { data: progressData, error: progressError } = progressResponse;
+  const { data: latestAttempt, error: quizError } = quizResponse;
 
   if (profileError) {
     console.error("Erro ao buscar profile:", JSON.stringify(profileError, null, 2));
@@ -88,7 +128,21 @@ export default async function CertificadoPage() {
     );
   }
 
-  if (profileError || certificateError) {
+  if (progressError) {
+    console.error(
+      "Erro ao buscar progresso das aulas:",
+      JSON.stringify(progressError, null, 2)
+    );
+  }
+
+  if (quizError) {
+    console.error(
+      "Erro ao buscar tentativa do quiz:",
+      JSON.stringify(quizError, null, 2)
+    );
+  }
+
+  if (profileError || certificateError || progressError || quizError) {
     return (
       <PageContainer>
         <PageState
@@ -122,7 +176,71 @@ export default async function CertificadoPage() {
   const termsAccepted = Boolean(profileRow?.terms_accepted);
 
   if (profileIncomplete || !termsAccepted) {
-    redirect("/perfil");
+    return (
+      <PageContainer>
+        <PageState
+          eyebrow="Certificação"
+          title="Complete seu cadastro para continuar"
+          description="Antes de acessar o certificado, você precisa preencher seus dados obrigatórios e aceitar os termos."
+          actionHref="/perfil"
+          actionLabel="Ir para meu perfil"
+        />
+      </PageContainer>
+    );
+  }
+
+  const completedLessons = progressData?.length ?? 0;
+  const totalLessons = courseData.lessons.length;
+  const allLessonsCompleted = totalLessons > 0 && completedLessons >= totalLessons;
+
+  if (!allLessonsCompleted) {
+    return (
+      <PageContainer>
+        <PageState
+          eyebrow="Certificação"
+          title="Certificado ainda não liberado"
+          description="Você precisa concluir todas as aulas antes de acessar seu certificado."
+          actionHref="/curso"
+          actionLabel="Voltar para o curso"
+        >
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-600">
+              Progresso atual:{" "}
+              <span className="font-semibold text-slate-900">
+                {completedLessons}/{totalLessons}
+              </span>{" "}
+              aulas concluídas.
+            </p>
+          </div>
+        </PageState>
+      </PageContainer>
+    );
+  }
+
+  const quizPassed = Boolean(latestAttempt?.passed);
+
+  if (!quizPassed) {
+    return (
+      <PageContainer>
+        <PageState
+          eyebrow="Certificação"
+          title="Certificado ainda não liberado"
+          description="Você precisa concluir e ser aprovado no quiz final antes de acessar seu certificado."
+          actionHref="/quiz"
+          actionLabel="Ir para o quiz"
+        >
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-600">
+              Status atual:{" "}
+              <span className="font-semibold text-slate-900">
+                quiz final pendente
+              </span>
+              .
+            </p>
+          </div>
+        </PageState>
+      </PageContainer>
+    );
   }
 
   if (!certificate) {
@@ -131,13 +249,15 @@ export default async function CertificadoPage() {
         <PageState
           eyebrow="Certificação"
           title="Certificado ainda não disponível"
-          description="Seu certificado será liberado automaticamente após a aprovação no quiz final."
-          actionHref="/quiz"
-          actionLabel="Ir para o quiz"
+          description="Seu certificado ainda está sendo preparado. Tente novamente em instantes."
+          actionHref="/dashboard"
+          actionLabel="Voltar ao painel"
         />
       </PageContainer>
     );
   }
+
+  const certificateUnlocked = Boolean(profileRow?.certificate_video_watched);
 
   const studentName =
     profile?.name?.trim() ||
@@ -146,7 +266,14 @@ export default async function CertificadoPage() {
     "Aluno(a)";
 
   return (
-    <PageContainer>
+    <PageContainer className="space-y-6">
+      <CertificateUnlockVideo
+        title={certificateUnlockVideo.title}
+        description={certificateUnlockVideo.description}
+        videoId={certificateUnlockVideo.videoId}
+        initiallyCompleted={certificateUnlocked}
+      />
+
       <CertificatePreview
         studentName={studentName}
         courseTitle={COURSE_TITLE}
@@ -156,9 +283,14 @@ export default async function CertificadoPage() {
             : "Data não informada"
         }
         certificateCode={certificate.certificate_code || "Sem código"}
+        locked={!certificateUnlocked}
+        lockedMessage="Assista ao vídeo obrigatório até o final para liberar seu certificado."
       />
 
-      <CertificateActions />
+      <CertificateActions
+        isUnlocked={certificateUnlocked}
+        courseSlug={COURSE_SLUG}
+      />
     </PageContainer>
   );
 }

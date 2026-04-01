@@ -22,12 +22,19 @@ function shuffleArray<T>(array: T[]): T[] {
  */
 export function getShuffledQuiz(): QuizQuestion[] {
   return shuffleArray(quizQuestions)
-    .slice(0, QUIZ_LENGTH) // 👈 limita para 10 perguntas
+    .slice(0, QUIZ_LENGTH)
     .map((q) => ({
       ...q,
       options: shuffleArray(q.options),
     }));
 }
+
+export const certificateUnlockVideo = {
+  title: "Vídeo obrigatório para liberação do certificado",
+  description:
+    "Assista ao vídeo até o final para liberar a visualização completa e o download do seu certificado.",
+  videoId: "LswDcX0c08I",
+};
 
 export const courseData: Course = {
   id: "curso-zubale",
@@ -49,7 +56,7 @@ export const courseData: Course = {
       videoId: "05Y2ku4Dnrs",
       order: 2,
     },
-        {
+    {
       id: "aula-3",
       title: "Detalhes técnicos e casos de uso",
       description: "Tudo que você precisa saber para iniciar na operação.",

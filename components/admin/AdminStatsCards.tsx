@@ -13,7 +13,17 @@ export default function AdminStatsCards({ summary }: Props) {
     { label: "Aprovados no quiz", value: summary.approvedUsers },
     { label: "Certificados emitidos", value: summary.certificatesIssued },
     { label: "Usuários certificados", value: summary.uniqueCertifiedUsers },
-    { label: "Admins por role", value: summary.adminUsers },
+
+    // 🔥 NOVO CARD (NPS)
+    {
+      label: "NPS",
+      value:
+        summary.averageCourseRating > 0
+          ? summary.averageCourseRating.toFixed(1)
+          : null,
+      isRating: true,
+    },
+
     { label: "Com unidade selecionada", value: summary.usersWithStoreSelection },
   ];
 
@@ -22,10 +32,28 @@ export default function AdminStatsCards({ summary }: Props) {
       {items.map((item) => (
         <Card key={item.label} className="rounded-2xl border-slate-200">
           <div className="space-y-3">
-            <p className="text-sm font-medium text-slate-500">{item.label}</p>
-            <p className="text-3xl font-bold tracking-tight text-slate-900">
-              {item.value}
+            <p className="text-sm font-medium text-slate-500">
+              {item.label}
             </p>
+
+            {item.isRating ? (
+              item.value ? (
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-bold tracking-tight text-slate-900">
+                    {item.value}
+                  </p>
+                  <span className="text-2xl text-blue-600">★</span>
+                </div>
+              ) : (
+                <p className="text-base font-semibold text-slate-900">
+                  Sem avaliações
+                </p>
+              )
+            ) : (
+              <p className="text-3xl font-bold tracking-tight text-slate-900">
+                {item.value}
+              </p>
+            )}
           </div>
         </Card>
       ))}

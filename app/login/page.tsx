@@ -8,10 +8,16 @@ import type {
 } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 import {
   getMissingProfileFields,
   type ProfileData,
 } from "@/lib/utils/progress";
+import {
+  isDisposableEmail,
+  isValidEmail,
+  normalizeEmail,
+} from "@/lib/data/disposable-email-domains";
 
 import PageContainer from "@/components/ui/page-container";
 import Button from "@/components/ui/Button";
@@ -62,6 +68,25 @@ export default function LoginPage() {
 
   const otpValues = Array.from({ length: 6 }, (_, index) => token[index] ?? "");
 
+  async function ensureProfileExists(user: User, fallbackEmail?: string) {
+    const profilePayload = {
+      id: user.id,
+      email: user.email ?? fallbackEmail ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("profiles")
+      .upsert(profilePayload, {
+        onConflict: "id",
+      });
+
+    if (error) {
+      console.error("Erro ao garantir profile após OTP:", error);
+      throw new Error("Não foi possível preparar seu cadastro.");
+    }
+  }
+
   async function redirectAuthenticatedUser() {
     const {
       data: { user },
@@ -73,21 +98,32 @@ export default function LoginPage() {
       return;
     }
 
-    const [{ data: rawProfile, error: profileError }, { data: applications, error: applicationsError }] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
-          )
-          .eq("id", user.id)
-          .maybeSingle<RawProfileRow>(),
-        supabase
-          .from("store_applications")
-          .select("id, is_primary, store_id")
-          .eq("user_id", user.id)
-          .returns<StoreApplicationRow[]>(),
-      ]);
+    try {
+      await ensureProfileExists(user, email);
+    } catch (error) {
+      console.error("Erro ao garantir profile no redirecionamento:", error);
+      setCheckingSession(false);
+      router.replace("/dashboard");
+      return;
+    }
+
+    const [
+      { data: rawProfile, error: profileError },
+      { data: applications, error: applicationsError },
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+        )
+        .eq("id", user.id)
+        .maybeSingle<RawProfileRow>(),
+      supabase
+        .from("store_applications")
+        .select("id, is_primary, store_id")
+        .eq("user_id", user.id)
+        .returns<StoreApplicationRow[]>(),
+    ]);
 
     if (profileError || applicationsError) {
       console.error("Erro ao buscar dados do usuário no login:", {
@@ -199,7 +235,7 @@ export default function LoginPage() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [router, supabase]);
+  }, [router, supabase, email]);
 
   useEffect(() => {
     if (step === "otp") {
@@ -300,7 +336,21 @@ export default function LoginPage() {
     setMessage("");
     setStatus("default");
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!isValidEmail(normalizedEmail)) {
+      setStatus("error");
+      setMessage("Digite um e-mail válido.");
+      setLoading(false);
+      return;
+    }
+
+    if (isDisposableEmail(normalizedEmail)) {
+      setStatus("error");
+      setMessage("Não aceitamos e-mails temporários.");
+      setLoading(false);
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
@@ -316,7 +366,7 @@ export default function LoginPage() {
     setEmail(normalizedEmail);
     setToken("");
     setStatus("success");
-    setMessage("Enviamos um código de 6 dígitos para seu e-mail.");
+    setMessage("Enviamos um código de verificação de 6 dígitos para o seu e-mail. Verifique também a caixa de spam.");
     setStep("otp");
     setLoading(false);
   }
@@ -354,6 +404,20 @@ export default function LoginPage() {
       setMessage(
         "O código foi validado, mas a sessão não ficou pronta a tempo. Atualize a página e tente novamente."
       );
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await ensureProfileExists(session.user, email);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível preparar seu cadastro.";
+
+      setStatus("error");
+      setMessage(errorMessage);
       setLoading(false);
       return;
     }
@@ -396,6 +460,7 @@ export default function LoginPage() {
                 placeholder="seuemail@exemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
               />
 
               <Button type="submit" disabled={!email.trim() || loading}>

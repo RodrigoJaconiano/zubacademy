@@ -17,6 +17,11 @@ export function calculateProgress(completed: number, total: number): number {
   return Math.round((completed / total) * 100);
 }
 
+export function calculateMediaProgress(current: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.round((current / total) * 100));
+}
+
 export type ProfileData = {
   name?: string | null;
   phone?: string | null;
@@ -49,6 +54,7 @@ type DashboardStateInput = {
   profileIncomplete: boolean;
   quizCompleted: boolean;
   certificateIssued: boolean;
+  certificateVideoWatched: boolean;
 };
 
 type DashboardStep = {
@@ -59,6 +65,7 @@ type DashboardStep = {
     | "Quiz bloqueado"
     | "Quiz liberado"
     | "Quiz concluído"
+    | "Vídeo obrigatório"
     | "Certificado liberado";
   badgeVariant: "success" | "warning" | "info";
 };
@@ -76,6 +83,7 @@ export type DashboardState = {
   allLessonsCompleted: boolean;
   quizUnlocked: boolean;
   certificateUnlocked: boolean;
+  certificateIssuedButLocked: boolean;
   nextStep: DashboardStep;
   certificate: DashboardCertificate;
   primaryCourseActionLabel: string;
@@ -91,17 +99,27 @@ export function getDashboardState({
   profileIncomplete,
   quizCompleted,
   certificateIssued,
+  certificateVideoWatched,
 }: DashboardStateInput): DashboardState {
   const progressPercentage = calculateProgress(completedLessons, totalLessons);
   const allLessonsCompleted =
     totalLessons > 0 && completedLessons >= totalLessons;
 
   const quizUnlocked = allLessonsCompleted && !profileIncomplete;
+
+  const certificateIssuedButLocked =
+    allLessonsCompleted &&
+    !profileIncomplete &&
+    quizCompleted &&
+    certificateIssued &&
+    !certificateVideoWatched;
+
   const certificateUnlocked =
     allLessonsCompleted &&
     !profileIncomplete &&
     quizCompleted &&
-    certificateIssued;
+    certificateIssued &&
+    certificateVideoWatched;
 
   const primaryCourseActionLabel =
     completedLessons > 0 ? "Continuar curso" : "Começar curso";
@@ -137,6 +155,14 @@ export function getDashboardState({
         "Seu quiz já foi concluído. Agora falta apenas a emissão do certificado para liberar o acesso.",
       badgeLabel: "Quiz concluído",
       badgeVariant: "info",
+    };
+  } else if (certificateIssuedButLocked) {
+    nextStep = {
+      title: "Assistir vídeo obrigatório",
+      description:
+        "Seu certificado já foi emitido, mas ainda falta assistir ao vídeo obrigatório para liberar a visualização completa e o download.",
+      badgeLabel: "Vídeo obrigatório",
+      badgeVariant: "warning",
     };
   } else if (certificateUnlocked) {
     nextStep = {
@@ -175,6 +201,17 @@ export function getDashboardState({
     };
   }
 
+  if (certificateIssuedButLocked) {
+    certificate = {
+      description:
+        "Seu certificado já foi emitido, mas está bloqueado até a conclusão do vídeo obrigatório.",
+      badgeLabel: "Vídeo pendente",
+      badgeVariant: "warning",
+      actionLabel: "Assistir vídeo e liberar",
+      actionHref: "/certificado",
+    };
+  }
+
   if (certificateUnlocked) {
     certificate = {
       description:
@@ -200,13 +237,16 @@ export function getDashboardState({
     ? "Atualizar cadastro"
     : certificateUnlocked
       ? "Abrir certificado"
-      : "Ver status do certificado";
+      : certificateIssuedButLocked
+        ? "Liberar certificado"
+        : "Ver status do certificado";
 
   return {
     progressPercentage,
     allLessonsCompleted,
     quizUnlocked,
     certificateUnlocked,
+    certificateIssuedButLocked,
     nextStep,
     certificate,
     primaryCourseActionLabel,

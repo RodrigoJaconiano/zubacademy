@@ -37,11 +37,16 @@ function formatQuizStatus(user: AdminUser) {
   return "Não realizado";
 }
 
+function formatRating(user: AdminUser) {
+  if (!user.courseRating) return "Sem nota";
+  return `${user.courseRating} ★`;
+}
+
 function IncompleteProfileBadge({ missingItems }: { missingItems: string[] }) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (missingItems.length === 0) {
-    return <span className="text-emerald-700 font-medium">Completo</span>;
+    return <span className="font-medium text-emerald-700">Completo</span>;
   }
 
   return (
@@ -86,11 +91,73 @@ function IncompleteProfileBadge({ missingItems }: { missingItems: string[] }) {
   );
 }
 
+function FeedbackCell({
+  primaryFeedback,
+  secondaryFeedback,
+}: {
+  primaryFeedback: string | null;
+  secondaryFeedback: string | null;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const hasFeedback = Boolean(
+    primaryFeedback?.trim() || secondaryFeedback?.trim()
+  );
+
+  if (!hasFeedback) {
+    return <span className="text-slate-500">-</span>;
+  }
+
+  return (
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        onBlur={() => setIsOpen(false)}
+        className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        aria-expanded={isOpen}
+        aria-label="Ver feedback"
+      >
+        Ver feedback
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xl">
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Feedback principal
+              </p>
+              <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {primaryFeedback?.trim() || "-"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Feedback complementar
+              </p>
+              <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {secondaryFeedback?.trim() || "-"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminUsersTable({ users }: Props) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [profileFilter, setProfileFilter] = useState("all");
   const [storeFilter, setStoreFilter] = useState("all");
+  const [ratingFilter, setRatingFilter] = useState("all");
 
   const filteredUsers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -112,16 +179,26 @@ export default function AdminUsersTable({ users }: Props) {
         (storeFilter === "with-store" && user.hasStoreSelection) ||
         (storeFilter === "without-store" && !user.hasStoreSelection);
 
-      return Boolean(matchesSearch && matchesProfile && matchesStore);
+      const matchesRating =
+        ratingFilter === "all" ||
+        (ratingFilter === "without-rating" && !user.courseRating) ||
+        (ratingFilter !== "without-rating" &&
+          user.courseRating !== null &&
+          String(user.courseRating) === ratingFilter);
+
+      return Boolean(
+        matchesSearch && matchesProfile && matchesStore && matchesRating
+      );
     });
-  }, [profileFilter, search, storeFilter, users]);
+  }, [profileFilter, ratingFilter, search, storeFilter, users]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
 
   const paginatedUsers = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
+    const start = (safePage - 1) * PAGE_SIZE;
     return filteredUsers.slice(start, start + PAGE_SIZE);
-  }, [filteredUsers, page]);
+  }, [filteredUsers, safePage]);
 
   return (
     <Card className="rounded-2xl border-slate-200">
@@ -131,12 +208,12 @@ export default function AdminUsersTable({ users }: Props) {
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Usuários</h2>
               <p className="text-sm text-slate-500">
-                Página {page} de {totalPages}
+                Página {safePage} de {totalPages}
               </p>
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 lg:grid-cols-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">
                 Buscar usuário
@@ -187,11 +264,33 @@ export default function AdminUsersTable({ users }: Props) {
                 <option value="without-store">Sem unidade</option>
               </select>
             </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">
+                Nota
+              </label>
+              <select
+                value={ratingFilter}
+                onChange={(event) => {
+                  setRatingFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none transition focus:border-slate-400"
+              >
+                <option value="all">Todas</option>
+                <option value="without-rating">Sem nota</option>
+                <option value="1">1 estrela</option>
+                <option value="2">2 estrelas</option>
+                <option value="3">3 estrelas</option>
+                <option value="4">4 estrelas</option>
+                <option value="5">5 estrelas</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1500px] border-collapse text-sm">
+          <table className="w-full min-w-[1900px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left">
                 <th className="py-3 pr-4 font-semibold text-slate-600">Nome</th>
@@ -207,6 +306,9 @@ export default function AdminUsersTable({ users }: Props) {
                 <th className="py-3 pr-4 font-semibold text-slate-600">Quiz</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Tentativas</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Certificado</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Nota</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Feedback</th>
+                <th className="py-3 pr-4 font-semibold text-slate-600">Data do feedback</th>
                 <th className="py-3 pr-4 font-semibold text-slate-600">Cadastro</th>
               </tr>
             </thead>
@@ -244,6 +346,18 @@ export default function AdminUsersTable({ users }: Props) {
                     {user.hasCertificate ? `Sim (${user.certificateCount})` : "Não"}
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
+                    {formatRating(user)}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">
+                    <FeedbackCell
+                      primaryFeedback={user.primaryFeedback}
+                      secondaryFeedback={user.secondaryFeedback}
+                    />
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">
+                    {formatDate(user.latestFeedbackAt)}
+                  </td>
+                  <td className="py-3 pr-4 text-slate-600">
                     {formatDate(user.created_at)}
                   </td>
                 </tr>
@@ -251,7 +365,7 @@ export default function AdminUsersTable({ users }: Props) {
 
               {paginatedUsers.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="py-8 text-center text-slate-500">
+                  <td colSpan={17} className="py-8 text-center text-slate-500">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
@@ -264,7 +378,7 @@ export default function AdminUsersTable({ users }: Props) {
           <Button
             type="button"
             onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-            disabled={page === 1}
+            disabled={safePage === 1}
             className="w-auto"
           >
             Anterior
@@ -273,7 +387,7 @@ export default function AdminUsersTable({ users }: Props) {
           <Button
             type="button"
             onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
-            disabled={page === totalPages}
+            disabled={safePage === totalPages}
             className="w-auto"
           >
             Próxima

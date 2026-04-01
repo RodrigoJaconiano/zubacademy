@@ -8,6 +8,7 @@ import type {
   AdminStoreMetric,
   AdminSummary,
   AdminUser,
+  CertificateFeedbackRow,
   CertificateRow,
   LessonProgressRow,
   ProfileRow,
@@ -35,6 +36,7 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     { data: quizAttempts, error: quizAttemptsError },
     { data: stores, error: storesError },
     { data: storeApplications, error: storeApplicationsError },
+    { data: certificateFeedback, error: certificateFeedbackError },
   ] = await Promise.all([
     adminSupabase
       .from("profiles")
@@ -85,6 +87,11 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     adminSupabase
       .from("store_applications")
       .select("id, user_id, store_id, is_primary, created_at"),
+
+    adminSupabase
+      .from("certificate_feedback")
+      .select("id, user_id, course_slug, rating, primary_feedback, secondary_feedback, created_at")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (profilesError) {
@@ -111,12 +118,17 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     console.error("Erro ao buscar store_applications:", storeApplicationsError.message);
   }
 
+  if (certificateFeedbackError) {
+    console.error("Erro ao buscar certificate_feedback:", certificateFeedbackError.message);
+  }
+
   const safeProfiles = (profiles ?? []) as ProfileRow[];
   const safeCertificates = (certificates ?? []) as CertificateRow[];
   const safeLessonProgress = (lessonProgress ?? []) as LessonProgressRow[];
   const safeQuizAttempts = (quizAttempts ?? []) as QuizAttemptRow[];
   const safeStores = (stores ?? []) as StoreRow[];
   const safeStoreApplications = (storeApplications ?? []) as StoreApplicationRow[];
+  const safeCertificateFeedback = (certificateFeedback ?? []) as CertificateFeedbackRow[];
 
   const totalLessons = courseData.lessons.length;
 
@@ -171,11 +183,37 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
         score === null
           ? current.bestQuizScore
           : current.bestQuizScore === null
-          ? score
-          : Math.max(current.bestQuizScore, score),
+            ? score
+            : Math.max(current.bestQuizScore, score),
       quizPassed: current.quizPassed || Boolean(attempt.passed),
       lastQuizAt: current.lastQuizAt ?? attempt.completed_at ?? null,
     });
+  });
+
+  const latestFeedbackByUser = new Map<
+    string,
+    {
+      rating: number | null;
+      primaryFeedback: string | null;
+      secondaryFeedback: string | null;
+      createdAt: string | null;
+    }
+  >();
+
+  safeCertificateFeedback.forEach((feedback) => {
+    if (!feedback.user_id) return;
+
+    if (!latestFeedbackByUser.has(feedback.user_id)) {
+      latestFeedbackByUser.set(feedback.user_id, {
+        rating:
+          typeof feedback.rating === "number" && feedback.rating >= 1 && feedback.rating <= 5
+            ? feedback.rating
+            : null,
+        primaryFeedback: feedback.primary_feedback ?? null,
+        secondaryFeedback: feedback.secondary_feedback ?? null,
+        createdAt: feedback.created_at ?? null,
+      });
+    }
   });
 
   const storeApplicationsByStoreId = new Map<string, StoreApplicationRow[]>();
@@ -192,6 +230,7 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     const progress = calculateProgress(completedLessons, totalLessons);
     const userCertificates = certificatesByUser.get(profile.id) ?? [];
     const quizStats = quizByUser.get(profile.id);
+    const latestFeedback = latestFeedbackByUser.get(profile.id);
 
     const missingItems = getMissingProfileFields({
       name: profile.name ?? null,
@@ -240,8 +279,26 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
       selectedStoresCount:
         (profile.primary_store_name ? 1 : 0) + secondaryStoreNames.length,
       hasStoreSelection: Boolean(profile.store_id || profile.primary_store_name),
+      courseRating: latestFeedback?.rating ?? null,
+      primaryFeedback: latestFeedback?.primaryFeedback ?? null,
+      secondaryFeedback: latestFeedback?.secondaryFeedback ?? null,
+      latestFeedbackAt: latestFeedback?.createdAt ?? null,
     };
   });
+
+  const ratings = safeCertificateFeedback
+    .map((item) => item.rating)
+    .filter(
+      (rating): rating is number =>
+        typeof rating === "number" && rating >= 1 && rating <= 5
+    );
+
+  const averageCourseRating =
+    ratings.length > 0
+      ? Number(
+          (ratings.reduce((acc, rating) => acc + rating, 0) / ratings.length).toFixed(1)
+        )
+      : 0;
 
   const summary: AdminSummary = {
     totalUsers: adminUsers.length,
@@ -261,6 +318,7 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
       (user) => user.app_role?.toLowerCase() === "admin"
     ).length,
     usersWithStoreSelection: adminUsers.filter((user) => user.hasStoreSelection).length,
+    averageCourseRating,
   };
 
   const funnel: AdminFunnel = {
@@ -272,7 +330,6 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     receivedCertificate: adminUsers.filter((user) => user.hasCertificate).length,
   };
 
-  const usersById = new Map(adminUsers.map((user) => [user.id, user]));
   const certifiedUserIds = new Set(
     safeCertificates.map((certificate) => certificate.user_id).filter(Boolean)
   );

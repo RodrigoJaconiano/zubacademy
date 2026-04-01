@@ -41,6 +41,7 @@ type RawProfileRow = {
   number?: string | number | null;
   terms_accepted?: boolean | null;
   store_id?: string | null;
+  certificate_video_watched?: boolean | null;
 };
 
 type LessonProgressRow = {
@@ -81,7 +82,7 @@ export default async function DashboardPage() {
     supabase
       .from("profiles")
       .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id, certificate_video_watched"
       )
       .eq("id", user.id)
       .maybeSingle<RawProfileRow>(),
@@ -182,6 +183,7 @@ export default async function DashboardPage() {
   );
 
   const certificateIssued = Boolean(certificateData?.id);
+  const certificateVideoWatched = Boolean(profileRow?.certificate_video_watched);
 
   const dashboardState = getDashboardState({
     totalLessons,
@@ -189,6 +191,7 @@ export default async function DashboardPage() {
     profileIncomplete,
     quizCompleted,
     certificateIssued,
+    certificateVideoWatched,
   });
 
   return (
@@ -299,6 +302,27 @@ export default async function DashboardPage() {
                     className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md"
                   >
                     Ver certificado
+                  </Link>
+                </div>
+              </div>
+            ) : dashboardState.certificateIssuedButLocked ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-700">
+                      Falta uma última etapa para liberar o certificado.
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      Seu certificado já foi emitido, mas você ainda precisa
+                      assistir ao vídeo obrigatório até o fim.
+                    </p>
+                  </div>
+
+                  <Link
+                    href="/certificado"
+                    className="inline-flex items-center justify-center rounded-2xl bg-amber-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-amber-700 hover:shadow-md"
+                  >
+                    Assistir vídeo e liberar
                   </Link>
                 </div>
               </div>

@@ -30,6 +30,15 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   if (user) {
+    await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
     const [{ data: rawProfile }, { data: applications }] = await Promise.all([
       supabase
         .from("profiles")

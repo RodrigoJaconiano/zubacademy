@@ -58,6 +58,16 @@ export type StoreApplicationRow = {
   created_at?: string | null;
 };
 
+export type CertificateFeedbackRow = {
+  id: string;
+  user_id?: string | null;
+  course_slug?: string | null;
+  rating?: number | null;
+  primary_feedback?: string | null;
+  secondary_feedback?: string | null;
+  created_at?: string | null;
+};
+
 export type AdminUser = {
   id: string;
   name: string | null;
@@ -84,6 +94,10 @@ export type AdminUser = {
   secondaryStoreNames: string[];
   selectedStoresCount: number;
   hasStoreSelection: boolean;
+  courseRating: number | null;
+  primaryFeedback: string | null;
+  secondaryFeedback: string | null;
+  latestFeedbackAt: string | null;
 };
 
 export type AdminCertificate = CertificateRow;
@@ -97,6 +111,7 @@ export type AdminSummary = {
   uniqueCertifiedUsers: number;
   adminUsers: number;
   usersWithStoreSelection: number;
+  averageCourseRating: number;
 };
 
 export type AdminFunnel = {

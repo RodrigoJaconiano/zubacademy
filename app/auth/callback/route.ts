@@ -44,6 +44,15 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login`);
   }
 
+  await supabase.from("profiles").upsert(
+    {
+      id: user.id,
+      email: user.email ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("name, phone, cpf, cep, city, state, address, number, terms_accepted")
