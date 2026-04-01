@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 type CertificateActionsProps = {
   isUnlocked: boolean;
   courseSlug: string;
+  hasSubmittedFeedback: boolean;
 };
 
 type FeedbackFormState = {
@@ -25,11 +26,14 @@ const initialFeedbackState: FeedbackFormState = {
 export default function CertificateActions({
   isUnlocked,
   courseSlug,
+  hasSubmittedFeedback,
 }: CertificateActionsProps) {
   const supabase = createClient();
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbackAlreadySubmitted, setFeedbackAlreadySubmitted] =
+    useState(hasSubmittedFeedback);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackState, setFeedbackState] =
     useState<FeedbackFormState>(initialFeedbackState);
@@ -59,12 +63,6 @@ export default function CertificateActions({
   function resetFeedback() {
     setFeedbackState(initialFeedbackState);
     setFeedbackError(null);
-  }
-
-  function openFeedbackModal() {
-    if (!isUnlocked || isGenerating) return;
-    setFeedbackError(null);
-    setIsFeedbackOpen(true);
   }
 
   function closeFeedbackModal() {
@@ -147,6 +145,31 @@ export default function CertificateActions({
     }
   }
 
+  async function handleDownloadClick() {
+    setFeedbackError(null);
+
+    if (!isUnlocked || isGenerating) return;
+
+    if (feedbackAlreadySubmitted) {
+      try {
+        setIsGenerating(true);
+        await generatePdf();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Não foi possível gerar o PDF do certificado.";
+        setFeedbackError(message);
+      } finally {
+        setIsGenerating(false);
+      }
+
+      return;
+    }
+
+    setIsFeedbackOpen(true);
+  }
+
   async function handleSubmitFeedbackAndDownload() {
     setFeedbackError(null);
 
@@ -200,6 +223,7 @@ export default function CertificateActions({
         );
       }
 
+      setFeedbackAlreadySubmitted(true);
       await generatePdf();
 
       setIsFeedbackOpen(false);
@@ -221,7 +245,7 @@ export default function CertificateActions({
       <div className="mt-6 flex flex-wrap justify-center gap-3 print:hidden">
         <button
           type="button"
-          onClick={openFeedbackModal}
+          onClick={handleDownloadClick}
           disabled={!isUnlocked || isGenerating}
           className={`inline-flex items-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition ${
             isUnlocked
@@ -236,6 +260,12 @@ export default function CertificateActions({
               : "Baixar certificado em PDF"}
         </button>
       </div>
+
+      {feedbackError ? (
+        <div className="mx-auto mt-4 max-w-xl rounded-2xl border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">{feedbackError}</p>
+        </div>
+      ) : null}
 
       {isFeedbackOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">

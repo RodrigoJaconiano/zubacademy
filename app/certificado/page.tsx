@@ -46,6 +46,10 @@ type LessonProgressRow = {
   id: string;
 };
 
+type CertificateFeedbackRow = {
+  id: string;
+};
+
 function formatDate(dateString: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "long",
@@ -83,6 +87,7 @@ export default async function CertificadoPage() {
     certificateResponse,
     progressResponse,
     quizResponse,
+    feedbackResponse,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -110,12 +115,21 @@ export default async function CertificadoPage() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle<QuizAttemptRow>(),
+    supabase
+      .from("certificate_feedback")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("course_slug", COURSE_SLUG)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<CertificateFeedbackRow>(),
   ]);
 
   const { data: rawProfile, error: profileError } = profileResponse;
   const { data: certificate, error: certificateError } = certificateResponse;
   const { data: progressData, error: progressError } = progressResponse;
   const { data: latestAttempt, error: quizError } = quizResponse;
+  const { data: existingFeedback, error: feedbackError } = feedbackResponse;
 
   if (profileError) {
     console.error("Erro ao buscar profile:", JSON.stringify(profileError, null, 2));
@@ -142,7 +156,14 @@ export default async function CertificadoPage() {
     );
   }
 
-  if (profileError || certificateError || progressError || quizError) {
+  if (feedbackError) {
+    console.error(
+      "Erro ao buscar feedback do certificado:",
+      JSON.stringify(feedbackError, null, 2)
+    );
+  }
+
+  if (profileError || certificateError || progressError || quizError || feedbackError) {
     return (
       <PageContainer>
         <PageState
@@ -258,6 +279,7 @@ export default async function CertificadoPage() {
   }
 
   const certificateUnlocked = Boolean(profileRow?.certificate_video_watched);
+  const hasSubmittedFeedback = Boolean(existingFeedback?.id);
 
   const studentName =
     profile?.name?.trim() ||
@@ -290,6 +312,7 @@ export default async function CertificadoPage() {
       <CertificateActions
         isUnlocked={certificateUnlocked}
         courseSlug={COURSE_SLUG}
+        hasSubmittedFeedback={hasSubmittedFeedback}
       />
     </PageContainer>
   );
