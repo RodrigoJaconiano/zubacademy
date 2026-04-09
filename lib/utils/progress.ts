@@ -101,9 +101,19 @@ export function getDashboardState({
   certificateIssued,
   certificateVideoWatched,
 }: DashboardStateInput): DashboardState {
-  const progressPercentage = calculateProgress(completedLessons, totalLessons);
+
+  const effectiveTotalLessons = certificateIssued
+    ? completedLessons
+    : totalLessons;
+
+  const progressPercentage = calculateProgress(
+    completedLessons,
+    effectiveTotalLessons
+  );
+
   const allLessonsCompleted =
-    totalLessons > 0 && completedLessons >= totalLessons;
+    certificateIssued ||
+    (totalLessons > 0 && completedLessons >= totalLessons);
 
   const quizUnlocked = allLessonsCompleted && !profileIncomplete;
 
