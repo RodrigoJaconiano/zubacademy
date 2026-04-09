@@ -63,6 +63,13 @@ export const courseData: Course = {
       videoId: "PyN0Wug0bpk",
       order: 3,
     },
+        {
+      id: "aula-4",
+      title: "Validação de Identidade no App",
+      description: "Como fazer o processo correto de validação de identidade.",
+      videoId: "D-nmC0bABnk",
+      order: 4,
+    },
   ],
 };
 
