@@ -16,7 +16,7 @@ export default function AdminStatsCards({ summary }: Props) {
 
     // 🔥 NOVO CARD (NPS)
     {
-      label: "NPS",
+      label: "CSAT",
       value:
         summary.averageCourseRating > 0
           ? summary.averageCourseRating.toFixed(1)
