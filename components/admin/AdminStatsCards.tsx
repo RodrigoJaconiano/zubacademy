@@ -11,7 +11,7 @@ export default function AdminStatsCards({ summary }: Props) {
     { label: "Perfis completos", value: summary.completedProfiles },
     { label: "Progresso médio", value: `${summary.averageProgress}%` },
     { label: "Aprovados no quiz", value: summary.approvedUsers },
-    { label: "Certificados emitidos", value: summary.certificatesIssued },
+    { label: "Feedbacks", value: summary.certificatesIssued },
     { label: "Usuários certificados", value: summary.uniqueCertifiedUsers },
 
     // 🔥 NOVO CARD (NPS)

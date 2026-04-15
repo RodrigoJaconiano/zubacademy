@@ -6,17 +6,15 @@ import {
 } from "@/lib/utils/progress";
 
 import type {
-  AdminCertificate,
   AdminDashboardData,
   AdminFunnel,
   AdminStoreMetric,
   AdminSummary,
   AdminUser,
-  CertificateRow,
 } from "./types";
 
 /**
- * tipos auxiliares
+ * tipos
  */
 
 type ProfileRow = {
@@ -53,6 +51,11 @@ type QuizAggRow = {
   attempts: number;
 };
 
+type CertificateAggRow = {
+  user_id: string;
+  certificate_count: number;
+};
+
 type FeedbackRow = {
   user_id: string;
   rating: number | null;
@@ -82,10 +85,31 @@ type QuizMapValue = {
 
 function parseSecondaryStoreNames(value?: string | null): string[] {
   if (!value) return [];
-  return value
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
+  return value.split(",").map((v) => v.trim()).filter(Boolean);
+}
+
+/**
+ * 🔥 PAGINAÇÃO SEGURA (sem limite de 1000)
+ */
+async function fetchAllPaginated<T>(
+  fetchFn: (from: number, to: number) => Promise<T[]>,
+  pageSize = 1000
+): Promise<T[]> {
+  let from = 0;
+  let all: T[] = [];
+
+  while (true) {
+    const chunk = await fetchFn(from, from + pageSize - 1);
+
+    if (!chunk || chunk.length === 0) break;
+
+    all = all.concat(chunk);
+    from += pageSize;
+
+    if (chunk.length < pageSize) break;
+  }
+
+  return all;
 }
 
 /**
@@ -97,210 +121,205 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
   const totalLessons = courseData.lessons.length;
 
   /**
-   * todas as queries em paralelo — uma única rodada de requests
+   * 🔥 FETCH PRINCIPAL (paralelo + paginado)
    */
 
-  const [
-    { data: profilesRaw },
-    { count: totalUsersCount },
-    { data: progressRaw },
-    { data: quizRaw },
-    { data: certificatesRaw },
-    { data: feedbackRaw },
-    { data: storesRaw },
-  ] = await Promise.all([
-    supabase.from("profiles").select(`
-      id,
-      name,
-      email,
-      cpf,
-      phone,
-      cep,
-      city,
-      state,
-      address,
-      number,
-      terms_accepted,
-      created_at,
-      updated_at,
-      app_role,
-      store_id,
-      store_selected_at,
-      primary_store_name,
-      secondary_store_names
-    `),
-    supabase
+const [
+  profiles,
+  progressRaw,
+  quizRaw,
+  certificatesAggRaw,
+  feedbackRaw,
+  storesRaw,
+  { count: totalUsersCount },
+] = await Promise.all([
+
+  fetchAllPaginated<ProfileRow>(async (from, to) => {
+    const { data } = await supabase
       .from("profiles")
-      .select("*", { count: "exact", head: true }),
-    supabase.rpc("admin_progress_agg"),
-    supabase.rpc("admin_quiz_agg"),
-    supabase.from("certificates").select(`
-      id,
-      user_id,
-      certificate_code,
-      issued_at,
-      course_slug
-    `),
-    supabase
-      .from("certificate_feedback")
-      .select(`
-        user_id,
-        rating,
-        primary_feedback,
-        secondary_feedback,
-        created_at
-      `)
-      .order("created_at", { ascending: false }),
-    supabase.from("stores").select(`
-      id,
-      name,
-      vacancies,
-      applied_count,
-      is_active
-    `),
-  ]);
+      .select(`id,name,email,cpf,phone,cep,city,state,address,number,
+        terms_accepted,created_at,updated_at,app_role,
+        store_id,store_selected_at,primary_store_name,secondary_store_names`)
+      .range(from, to);
+
+    return (data ?? []) as ProfileRow[];
+  }),
+
+  fetchAllPaginated<ProgressAggRow>(async (from, to) => {
+    const { data } = await supabase
+      .rpc("admin_progress_agg")
+      .range(from, to);
+
+    return (data ?? []) as ProgressAggRow[];
+  }),
+
+  fetchAllPaginated<QuizAggRow>(async (from, to) => {
+    const { data } = await supabase
+      .rpc("admin_quiz_agg")
+      .range(from, to);
+
+    return (data ?? []) as QuizAggRow[];
+  }),
+
+  fetchAllPaginated<CertificateAggRow>(async (from, to) => {
+    const { data } = await supabase
+      .rpc("admin_certificates_agg")
+      .range(from, to);
+
+    return (data ?? []) as CertificateAggRow[];
+  }),
+
+  fetchAllPaginated<FeedbackRow>(async (from, to) => {
+    const { data } = await supabase
+      .rpc("admin_feedback_latest")
+      .range(from, to);
+
+    return (data ?? []) as FeedbackRow[];
+  }),
+
+  supabase
+    .from("stores")
+    .select(`id,name,vacancies,applied_count,is_active`)
+    .then((res) => res.data ?? []),
+
+  supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true }),
+]);
+
 
   /**
-   * profiles
+   * DEBUG
    */
-
-  const profiles = (profilesRaw ?? []) as ProfileRow[];
+  console.log("=== RAW DATA ===");
+  console.log("profiles:", profiles.length);
+  console.log("progressRaw:", progressRaw.length);
+  console.log("quizRaw:", quizRaw.length);
+  console.log("certificatesAggRaw:", certificatesAggRaw.length);
+  console.log("feedbackRaw:", feedbackRaw.length);
 
   /**
-   * progress aggregated
+   * maps
    */
-
-  const progressAgg = (progressRaw ?? []) as ProgressAggRow[];
 
   const progressMap = new Map<string, number>();
-
-  progressAgg.forEach((row) => {
-    progressMap.set(row.user_id, Number(row.completed_lessons));
-  });
-
-  /**
-   * quiz aggregated
-   */
-
-  const quizAgg = (quizRaw ?? []) as QuizAggRow[];
+  progressRaw.forEach((r) =>
+    progressMap.set(r.user_id, Number(r.completed_lessons))
+  );
 
   const quizMap = new Map<string, QuizMapValue>();
+  quizRaw.forEach((r) =>
+    quizMap.set(r.user_id, {
+      bestScore: r.best_score,
+      passed: Boolean(r.passed),
+      lastAttempt: r.last_attempt,
+      attempts: Number(r.attempts ?? 0),
+    })
+  );
 
-  quizAgg.forEach((row) => {
-    quizMap.set(row.user_id, {
-      bestScore: row.best_score !== null ? Number(row.best_score) : null,
-      passed: Boolean(row.passed),
-      lastAttempt: row.last_attempt ?? null,
-      attempts: Number(row.attempts ?? 0),
-    });
-  });
-
-  /**
-   * certificates
-   */
-
-  const certificates = (certificatesRaw ?? []) as CertificateRow[];
-
-  const certificateMap = new Map<string, CertificateRow[]>();
-
-  certificates.forEach((cert) => {
-    const uid = cert.user_id ?? "";
-    if (!certificateMap.has(uid)) {
-      certificateMap.set(uid, []);
-    }
-    certificateMap.get(uid)!.push(cert);
-  });
-
-  /**
-   * feedback
-   */
-
-  const feedbackRows = (feedbackRaw ?? []) as FeedbackRow[];
+  const certificateMap = new Map<string, number>();
+  certificatesAggRaw.forEach((r) =>
+    certificateMap.set(r.user_id, Number(r.certificate_count))
+  );
 
   const feedbackMap = new Map<string, FeedbackRow>();
-
-  feedbackRows.forEach((f) => {
+  feedbackRaw.forEach((f) => {
     if (!feedbackMap.has(f.user_id)) {
       feedbackMap.set(f.user_id, f);
     }
   });
 
   /**
-   * stores
-   */
-
-  const stores = (storesRaw ?? []) as StoreRow[];
-
-  /**
    * users
    */
 
-  const users: AdminUser[] = profiles.map((profile) => {
-    const completedLessons = progressMap.get(profile.id) ?? 0;
-    const certs = certificateMap.get(profile.id) ?? [];
-    const hasCertificate = certs.length > 0;
+  const users: AdminUser[] = profiles.map((p) => {
+    const completedLessons = progressMap.get(p.id) ?? 0;
+    const certCount = certificateMap.get(p.id) ?? 0;
 
-    const progress = hasCertificate
-      ? 100
-      : calculateProgress(completedLessons, totalLessons);
-
-    const quiz = quizMap.get(profile.id);
-    const feedback = feedbackMap.get(profile.id);
+    const quiz = quizMap.get(p.id);
+    const feedback = feedbackMap.get(p.id);
 
     const missingItems = getMissingProfileFields({
-      name: profile.name,
-      phone: profile.phone,
-      cpf: profile.cpf,
-      cep: profile.cep,
-      city: profile.city,
-      state: profile.state,
-      address: profile.address,
-      number: profile.number !== null ? String(profile.number) : null,
+      name: p.name,
+      phone: p.phone,
+      cpf: p.cpf,
+      cep: p.cep,
+      city: p.city,
+      state: p.state,
+      address: p.address,
+      number: p.number ? String(p.number) : null,
     });
 
-    if (!profile.terms_accepted) {
+    if (!p.terms_accepted) {
       missingItems.push("Aceite dos termos");
     }
 
-    const secondaryStores = parseSecondaryStoreNames(
-      profile.secondary_store_names
+    const secondary = parseSecondaryStoreNames(
+      p.secondary_store_names
     );
 
     return {
-      id: profile.id,
-      name: profile.name,
-      email: profile.email,
-      cpf: profile.cpf,
-      phone: profile.phone,
-      created_at: profile.created_at,
-      updated_at: profile.updated_at,
-      app_role: profile.app_role,
-      progress,
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      cpf: p.cpf,
+      phone: p.phone,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      app_role: p.app_role,
+
+      progress:
+        certCount > 0
+          ? 100
+          : calculateProgress(completedLessons, totalLessons),
+
       completedLessons,
       totalLessons,
+
       isComplete: missingItems.length === 0,
       missingItems,
-      hasCertificate,
-      certificateCount: certs.length,
+
+      hasCertificate: certCount > 0,
+      certificateCount: certCount,
+
       quizAttempts: quiz?.attempts ?? 0,
       bestQuizScore: quiz?.bestScore ?? null,
       quizPassed: quiz?.passed ?? false,
       lastQuizAt: quiz?.lastAttempt ?? null,
-      storeId: profile.store_id,
-      storeSelectedAt: profile.store_selected_at,
-      primaryStoreName: profile.primary_store_name,
-      secondaryStoreNames: secondaryStores,
+
+      storeId: p.store_id,
+      storeSelectedAt: p.store_selected_at,
+      primaryStoreName: p.primary_store_name,
+      secondaryStoreNames: secondary,
       selectedStoresCount:
-        (profile.primary_store_name ? 1 : 0) + secondaryStores.length,
-      hasStoreSelection: Boolean(
-        profile.store_id || profile.primary_store_name
-      ),
+        (p.primary_store_name ? 1 : 0) + secondary.length,
+
+      hasStoreSelection: Boolean(p.store_selected_at),
+
       courseRating: feedback?.rating ?? null,
       primaryFeedback: feedback?.primary_feedback ?? null,
       secondaryFeedback: feedback?.secondary_feedback ?? null,
       latestFeedbackAt: feedback?.created_at ?? null,
     };
   });
+
+  /**
+   * métricas
+   */
+
+  const totalCertificates = certificatesAggRaw.reduce(
+    (acc, c) => acc + c.certificate_count,
+    0
+  );
+
+  const totalFeedbacks = feedbackRaw.length;
+
+  console.log("=== FINAL METRICS ===");
+  console.log("totalUsers:", totalUsersCount);
+  console.log("users:", users.length);
+  console.log("certificates:", totalCertificates);
+  console.log("feedbacks:", totalFeedbacks);
 
   /**
    * summary
@@ -310,22 +329,23 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     totalUsers: totalUsersCount ?? users.length,
     completedProfiles: users.filter((u) => u.isComplete).length,
     approvedUsers: users.filter((u) => u.quizPassed).length,
-    certificatesIssued: certificates.length,
-    uniqueCertifiedUsers: certificateMap.size,
+
+    // 🔥 ALTERADO
+    certificatesIssued: totalFeedbacks, // agora é FEEDBACK
+    uniqueCertifiedUsers: users.filter((u) => u.hasCertificate).length,
+
     usersWithStoreSelection: users.filter((u) => u.hasStoreSelection).length,
     adminUsers: users.filter((u) => u.app_role === "admin").length,
+
     averageProgress:
       users.length > 0
         ? Math.round(
             users.reduce((acc, u) => acc + u.progress, 0) / users.length
           )
         : 0,
+
     averageCourseRating: 4.9,
   };
-
-  /**
-   * funnel
-   */
 
   const funnel: AdminFunnel = {
     registered: totalUsersCount ?? users.length,
@@ -336,21 +356,19 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     receivedCertificate: users.filter((u) => u.hasCertificate).length,
   };
 
-  /**
-   * store metrics
-   */
-
-  const storeMetrics: AdminStoreMetric[] = stores.map((store) => {
-    const storeUsers = users.filter((u) => u.storeId === store.id);
+  const storeMetrics: AdminStoreMetric[] = storesRaw.map((s: StoreRow) => {
+    const storeUsers = users.filter((u) => u.storeId === s.id);
 
     return {
-      storeId: store.id,
-      storeName: store.name ?? "Loja",
-      vacancies: store.vacancies ?? 0,
-      appliedCount: store.applied_count ?? 0,
-      active: Boolean(store.is_active),
+      storeId: s.id,
+      storeName: s.name ?? "Loja",
+      vacancies: s.vacancies ?? 0,
+      appliedCount: s.applied_count ?? 0,
+      active: Boolean(s.is_active),
+
       primaryApplications: storeUsers.length,
       secondaryApplications: 0,
+
       selectedUsers: storeUsers.length,
       completedProfiles: storeUsers.filter((u) => u.isComplete).length,
       completedCourseUsers: storeUsers.filter((u) => u.progress === 100).length,
@@ -361,7 +379,7 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
 
   return {
     users,
-    certificates: certificates as AdminCertificate[],
+    certificates: [],
     summary,
     funnel,
     stores: storeMetrics,
