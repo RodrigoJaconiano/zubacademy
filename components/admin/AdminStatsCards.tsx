@@ -13,8 +13,6 @@ export default function AdminStatsCards({ summary }: Props) {
     { label: "Aprovados no quiz", value: summary.approvedUsers },
     { label: "Feedbacks", value: summary.certificatesIssued },
     { label: "Usuários certificados", value: summary.uniqueCertifiedUsers },
-
-    // 🔥 NOVO CARD (NPS)
     {
       label: "CSAT",
       value:
@@ -23,7 +21,6 @@ export default function AdminStatsCards({ summary }: Props) {
           : null,
       isRating: true,
     },
-
     { label: "Com unidade selecionada", value: summary.usersWithStoreSelection },
   ];
 

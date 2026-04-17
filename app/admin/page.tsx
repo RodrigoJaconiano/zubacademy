@@ -4,10 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessAdminPanel } from "@/lib/admin/access";
 import { getAdminDashboardData } from "@/lib/admin/dashboard-data";
+import type { DateFilter } from "@/lib/admin/date-filter";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
   try {
     const supabase = await createClient();
 
@@ -21,17 +26,16 @@ export default async function AdminPage() {
       redirect("/login");
     }
 
-    if (!user) {
-      redirect("/login");
-    }
+    if (!user) redirect("/login");
 
     const adminSupabase = createAdminClient();
 
-    const { data: currentProfile, error: currentProfileError } = await adminSupabase
-      .from("profiles")
-      .select("app_role")
-      .eq("id", user.id)
-      .maybeSingle();
+    const { data: currentProfile, error: currentProfileError } =
+      await adminSupabase
+        .from("profiles")
+        .select("app_role")
+        .eq("id", user.id)
+        .maybeSingle();
 
     if (currentProfileError) {
       console.error(
@@ -41,17 +45,23 @@ export default async function AdminPage() {
     }
 
     const canAccessAdmin = canAccessAdminPanel({
-      email: user.email,
+      email:   user.email,
       appRole: currentProfile?.app_role ?? null,
     });
 
-    if (!canAccessAdmin) {
-      redirect("/dashboard");
-    }
+    if (!canAccessAdmin) redirect("/dashboard");
 
-    const dashboardData = await getAdminDashboardData();
+    const { from, to } = await searchParams;
 
-    return <AdminDashboard {...dashboardData} />;
+    const dateFilter: DateFilter =
+      from && to   ? { from, to }       :
+      from         ? { from, to: from } :
+      to           ? { from: to, to }   :
+      null;
+
+    const dashboardData = await getAdminDashboardData(dateFilter);
+
+    return <AdminDashboard {...dashboardData} dateFilter={dateFilter} />;
   } catch (error) {
     console.error("Erro fatal ao renderizar /admin:", error);
     throw error;

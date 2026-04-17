@@ -145,3 +145,4 @@ export type AdminDashboardData = {
   funnel: AdminFunnel;
   stores: AdminStoreMetric[];
 };
+

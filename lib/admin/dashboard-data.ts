@@ -12,9 +12,10 @@ import type {
   AdminSummary,
   AdminUser,
 } from "./types";
+import type { DateFilter } from "./date-filter";
 
 /**
- * tipos
+ * tipos internos
  */
 
 type ProfileRow = {
@@ -85,27 +86,35 @@ type QuizMapValue = {
 
 function parseSecondaryStoreNames(value?: string | null): string[] {
   if (!value) return [];
-  return value.split(",").map((v) => v.trim()).filter(Boolean);
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
 }
 
-/**
- * 🔥 PAGINAÇÃO SEGURA (sem limite de 1000)
- */
+function toFromISO(date: string): string {
+  return `${date}T03:00:00.000Z`;
+}
+
+function toToISO(date: string): string {
+  const d = new Date(`${date}T03:00:00.000Z`);
+  d.setDate(d.getDate() + 1);
+  d.setMilliseconds(d.getMilliseconds() - 1);
+  return d.toISOString();
+}
+
 async function fetchAllPaginated<T>(
   fetchFn: (from: number, to: number) => Promise<T[]>,
   pageSize = 1000
 ): Promise<T[]> {
-  let from = 0;
+  let offset = 0;
   let all: T[] = [];
 
   while (true) {
-    const chunk = await fetchFn(from, from + pageSize - 1);
-
+    const chunk = await fetchFn(offset, offset + pageSize - 1);
     if (!chunk || chunk.length === 0) break;
-
     all = all.concat(chunk);
-    from += pageSize;
-
+    offset += pageSize;
     if (chunk.length < pageSize) break;
   }
 
@@ -115,88 +124,79 @@ async function fetchAllPaginated<T>(
 /**
  * main
  */
-
-export async function getAdminDashboardData(): Promise<AdminDashboardData> {
+export async function getAdminDashboardData(
+  dateFilter?: DateFilter
+): Promise<AdminDashboardData> {
   const supabase = createAdminClient();
   const totalLessons = courseData.lessons.length;
 
-  /**
-   * 🔥 FETCH PRINCIPAL (paralelo + paginado)
-   */
+  const fromISO = dateFilter ? toFromISO(dateFilter.from) : null;
+  const toISO   = dateFilter ? toToISO(dateFilter.to)     : null;
 
-const [
-  profiles,
-  progressRaw,
-  quizRaw,
-  certificatesAggRaw,
-  feedbackRaw,
-  storesRaw,
-  { count: totalUsersCount },
-] = await Promise.all([
+  const [
+    profiles,
+    progressRaw,
+    quizRaw,
+    certificatesAggRaw,
+    feedbackRaw,
+    storesRaw,
+    { count: totalUsersCount },
+  ] = await Promise.all([
 
-  fetchAllPaginated<ProfileRow>(async (from, to) => {
-    const { data } = await supabase
+    fetchAllPaginated<ProfileRow>(async (from, to) => {
+      let q = supabase
+        .from("profiles")
+        .select(
+          `id,name,email,cpf,phone,cep,city,state,address,number,
+           terms_accepted,created_at,updated_at,app_role,
+           store_id,store_selected_at,primary_store_name,secondary_store_names`
+        )
+        .range(from, to);
+
+      if (fromISO) q = q.gte("created_at", fromISO);
+      if (toISO)   q = q.lte("created_at", toISO);
+
+      const { data } = await q;
+      return (data ?? []) as ProfileRow[];
+    }),
+
+    fetchAllPaginated<ProgressAggRow>(async (from, to) => {
+      const { data } = await supabase
+        .rpc("admin_progress_agg", { p_from: fromISO, p_to: toISO })
+        .range(from, to);
+      return (data ?? []) as ProgressAggRow[];
+    }),
+
+    fetchAllPaginated<QuizAggRow>(async (from, to) => {
+      const { data } = await supabase
+        .rpc("admin_quiz_agg", { p_from: fromISO, p_to: toISO })
+        .range(from, to);
+      return (data ?? []) as QuizAggRow[];
+    }),
+
+    fetchAllPaginated<CertificateAggRow>(async (from, to) => {
+      const { data } = await supabase
+        .rpc("admin_certificates_agg", { p_from: fromISO, p_to: toISO })
+        .range(from, to);
+      return (data ?? []) as CertificateAggRow[];
+    }),
+
+    fetchAllPaginated<FeedbackRow>(async (from, to) => {
+      const { data } = await supabase
+        .rpc("admin_feedback_latest", { p_from: fromISO, p_to: toISO })
+        .range(from, to);
+      return (data ?? []) as FeedbackRow[];
+    }),
+
+    supabase
+      .from("stores")
+      .select(`id,name,vacancies,applied_count,is_active`)
+      .then((res) => res.data ?? []),
+
+    supabase
       .from("profiles")
-      .select(`id,name,email,cpf,phone,cep,city,state,address,number,
-        terms_accepted,created_at,updated_at,app_role,
-        store_id,store_selected_at,primary_store_name,secondary_store_names`)
-      .range(from, to);
-
-    return (data ?? []) as ProfileRow[];
-  }),
-
-  fetchAllPaginated<ProgressAggRow>(async (from, to) => {
-    const { data } = await supabase
-      .rpc("admin_progress_agg")
-      .range(from, to);
-
-    return (data ?? []) as ProgressAggRow[];
-  }),
-
-  fetchAllPaginated<QuizAggRow>(async (from, to) => {
-    const { data } = await supabase
-      .rpc("admin_quiz_agg")
-      .range(from, to);
-
-    return (data ?? []) as QuizAggRow[];
-  }),
-
-  fetchAllPaginated<CertificateAggRow>(async (from, to) => {
-    const { data } = await supabase
-      .rpc("admin_certificates_agg")
-      .range(from, to);
-
-    return (data ?? []) as CertificateAggRow[];
-  }),
-
-  fetchAllPaginated<FeedbackRow>(async (from, to) => {
-    const { data } = await supabase
-      .rpc("admin_feedback_latest")
-      .range(from, to);
-
-    return (data ?? []) as FeedbackRow[];
-  }),
-
-  supabase
-    .from("stores")
-    .select(`id,name,vacancies,applied_count,is_active`)
-    .then((res) => res.data ?? []),
-
-  supabase
-    .from("profiles")
-    .select("*", { count: "exact", head: true }),
-]);
-
-
-  /**
-   * DEBUG
-   */
-  console.log("=== RAW DATA ===");
-  console.log("profiles:", profiles.length);
-  console.log("progressRaw:", progressRaw.length);
-  console.log("quizRaw:", quizRaw.length);
-  console.log("certificatesAggRaw:", certificatesAggRaw.length);
-  console.log("feedbackRaw:", feedbackRaw.length);
+      .select("*", { count: "exact", head: true }),
+  ]);
 
   /**
    * maps
@@ -210,10 +210,10 @@ const [
   const quizMap = new Map<string, QuizMapValue>();
   quizRaw.forEach((r) =>
     quizMap.set(r.user_id, {
-      bestScore: r.best_score,
-      passed: Boolean(r.passed),
+      bestScore:   r.best_score,
+      passed:      Boolean(r.passed),
       lastAttempt: r.last_attempt,
-      attempts: Number(r.attempts ?? 0),
+      attempts:    Number(r.attempts ?? 0),
     })
   );
 
@@ -224,9 +224,7 @@ const [
 
   const feedbackMap = new Map<string, FeedbackRow>();
   feedbackRaw.forEach((f) => {
-    if (!feedbackMap.has(f.user_id)) {
-      feedbackMap.set(f.user_id, f);
-    }
+    if (!feedbackMap.has(f.user_id)) feedbackMap.set(f.user_id, f);
   });
 
   /**
@@ -235,39 +233,34 @@ const [
 
   const users: AdminUser[] = profiles.map((p) => {
     const completedLessons = progressMap.get(p.id) ?? 0;
-    const certCount = certificateMap.get(p.id) ?? 0;
-
-    const quiz = quizMap.get(p.id);
-    const feedback = feedbackMap.get(p.id);
+    const certCount        = certificateMap.get(p.id) ?? 0;
+    const quiz             = quizMap.get(p.id);
+    const feedback         = feedbackMap.get(p.id);
 
     const missingItems = getMissingProfileFields({
-      name: p.name,
-      phone: p.phone,
-      cpf: p.cpf,
-      cep: p.cep,
-      city: p.city,
-      state: p.state,
+      name:    p.name,
+      phone:   p.phone,
+      cpf:     p.cpf,
+      cep:     p.cep,
+      city:    p.city,
+      state:   p.state,
       address: p.address,
-      number: p.number ? String(p.number) : null,
+      number:  p.number ? String(p.number) : null,
     });
 
-    if (!p.terms_accepted) {
-      missingItems.push("Aceite dos termos");
-    }
+    if (!p.terms_accepted) missingItems.push("Aceite dos termos");
 
-    const secondary = parseSecondaryStoreNames(
-      p.secondary_store_names
-    );
+    const secondary = parseSecondaryStoreNames(p.secondary_store_names);
 
     return {
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      cpf: p.cpf,
-      phone: p.phone,
+      id:         p.id,
+      name:       p.name,
+      email:      p.email,
+      cpf:        p.cpf,
+      phone:      p.phone,
       created_at: p.created_at,
       updated_at: p.updated_at,
-      app_role: p.app_role,
+      app_role:   p.app_role,
 
       progress:
         certCount > 0
@@ -277,30 +270,28 @@ const [
       completedLessons,
       totalLessons,
 
-      isComplete: missingItems.length === 0,
+      isComplete:   missingItems.length === 0,
       missingItems,
 
-      hasCertificate: certCount > 0,
+      hasCertificate:   certCount > 0,
       certificateCount: certCount,
 
-      quizAttempts: quiz?.attempts ?? 0,
-      bestQuizScore: quiz?.bestScore ?? null,
-      quizPassed: quiz?.passed ?? false,
-      lastQuizAt: quiz?.lastAttempt ?? null,
+      quizAttempts:  quiz?.attempts    ?? 0,
+      bestQuizScore: quiz?.bestScore   ?? null,
+      quizPassed:    quiz?.passed      ?? false,
+      lastQuizAt:    quiz?.lastAttempt ?? null,
 
-      storeId: p.store_id,
-      storeSelectedAt: p.store_selected_at,
-      primaryStoreName: p.primary_store_name,
+      storeId:             p.store_id,
+      storeSelectedAt:     p.store_selected_at,
+      primaryStoreName:    p.primary_store_name,
       secondaryStoreNames: secondary,
-      selectedStoresCount:
-        (p.primary_store_name ? 1 : 0) + secondary.length,
+      selectedStoresCount: (p.primary_store_name ? 1 : 0) + secondary.length,
+      hasStoreSelection:   Boolean(p.store_selected_at),
 
-      hasStoreSelection: Boolean(p.store_selected_at),
-
-      courseRating: feedback?.rating ?? null,
-      primaryFeedback: feedback?.primary_feedback ?? null,
+      courseRating:      feedback?.rating             ?? null,
+      primaryFeedback:   feedback?.primary_feedback   ?? null,
       secondaryFeedback: feedback?.secondary_feedback ?? null,
-      latestFeedbackAt: feedback?.created_at ?? null,
+      latestFeedbackAt:  feedback?.created_at         ?? null,
     };
   });
 
@@ -308,72 +299,55 @@ const [
    * métricas
    */
 
-  const totalCertificates = certificatesAggRaw.reduce(
-    (acc, c) => acc + c.certificate_count,
-    0
-  );
-
   const totalFeedbacks = feedbackRaw.length;
 
-  console.log("=== FINAL METRICS ===");
-  console.log("totalUsers:", totalUsersCount);
-  console.log("users:", users.length);
-  console.log("certificates:", totalCertificates);
-  console.log("feedbacks:", totalFeedbacks);
-
-  /**
-   * summary
-   */
-
   const summary: AdminSummary = {
-    totalUsers: totalUsersCount ?? users.length,
-    completedProfiles: users.filter((u) => u.isComplete).length,
-    approvedUsers: users.filter((u) => u.quizPassed).length,
+    totalUsers: dateFilter
+      ? users.length
+      : (totalUsersCount ?? users.length),
 
-    // 🔥 ALTERADO
-    certificatesIssued: totalFeedbacks, // agora é FEEDBACK
-    uniqueCertifiedUsers: users.filter((u) => u.hasCertificate).length,
-
+    completedProfiles:       users.filter((u) => u.isComplete).length,
+    approvedUsers:           users.filter((u) => u.quizPassed).length,
+    certificatesIssued:      totalFeedbacks,
+    uniqueCertifiedUsers:    users.filter((u) => u.hasCertificate).length,
     usersWithStoreSelection: users.filter((u) => u.hasStoreSelection).length,
-    adminUsers: users.filter((u) => u.app_role === "admin").length,
-
+    adminUsers:              users.filter((u) => u.app_role === "admin").length,
     averageProgress:
       users.length > 0
         ? Math.round(
             users.reduce((acc, u) => acc + u.progress, 0) / users.length
           )
         : 0,
-
     averageCourseRating: 4.9,
   };
 
   const funnel: AdminFunnel = {
-    registered: totalUsersCount ?? users.length,
-    selectedStore: users.filter((u) => u.hasStoreSelection).length,
-    completedProfile: users.filter((u) => u.isComplete).length,
-    completedCourse: users.filter((u) => u.progress === 100).length,
-    passedQuiz: users.filter((u) => u.quizPassed).length,
+    registered: dateFilter
+      ? users.length
+      : (totalUsersCount ?? users.length),
+
+    selectedStore:       users.filter((u) => u.hasStoreSelection).length,
+    completedProfile:    users.filter((u) => u.isComplete).length,
+    completedCourse:     users.filter((u) => u.progress === 100).length,
+    passedQuiz:          users.filter((u) => u.quizPassed).length,
     receivedCertificate: users.filter((u) => u.hasCertificate).length,
   };
 
-  const storeMetrics: AdminStoreMetric[] = storesRaw.map((s: StoreRow) => {
+  const storeMetrics: AdminStoreMetric[] = (storesRaw as StoreRow[]).map((s) => {
     const storeUsers = users.filter((u) => u.storeId === s.id);
-
     return {
-      storeId: s.id,
-      storeName: s.name ?? "Loja",
-      vacancies: s.vacancies ?? 0,
-      appliedCount: s.applied_count ?? 0,
-      active: Boolean(s.is_active),
-
-      primaryApplications: storeUsers.length,
+      storeId:               s.id,
+      storeName:             s.name ?? "Loja",
+      vacancies:             s.vacancies ?? 0,
+      appliedCount:          s.applied_count ?? 0,
+      active:                Boolean(s.is_active),
+      primaryApplications:   storeUsers.length,
       secondaryApplications: 0,
-
-      selectedUsers: storeUsers.length,
-      completedProfiles: storeUsers.filter((u) => u.isComplete).length,
-      completedCourseUsers: storeUsers.filter((u) => u.progress === 100).length,
-      passedQuizUsers: storeUsers.filter((u) => u.quizPassed).length,
-      certifiedUsers: storeUsers.filter((u) => u.hasCertificate).length,
+      selectedUsers:         storeUsers.length,
+      completedProfiles:     storeUsers.filter((u) => u.isComplete).length,
+      completedCourseUsers:  storeUsers.filter((u) => u.progress === 100).length,
+      passedQuizUsers:       storeUsers.filter((u) => u.quizPassed).length,
+      certifiedUsers:        storeUsers.filter((u) => u.hasCertificate).length,
     };
   });
 

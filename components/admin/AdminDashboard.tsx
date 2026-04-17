@@ -5,6 +5,7 @@ import AdminCharts from "./AdminCharts";
 import AdminUsersTable from "./AdminUserTable";
 import AdminFunnelCards from "./AdminFunnelCards";
 import AdminStoreTable from "./AdminStoreTable";
+import { DateRangeFilter } from "./DateRangeFilter";
 import Button from "@/components/ui/Button";
 import {
   downloadCsv,
@@ -19,6 +20,7 @@ import type {
   AdminSummary,
   AdminUser,
 } from "@/lib/admin/types";
+import type { DateFilter } from "@/lib/admin/date-filter";
 
 type AdminDashboardProps = {
   users: AdminUser[];
@@ -26,6 +28,7 @@ type AdminDashboardProps = {
   summary: AdminSummary;
   funnel: AdminFunnel;
   stores: AdminStoreMetric[];
+  dateFilter: DateFilter;
 };
 
 export default function AdminDashboard({
@@ -34,6 +37,7 @@ export default function AdminDashboard({
   summary,
   funnel,
   stores,
+  dateFilter,
 }: AdminDashboardProps) {
   function handleDownloadUsersCsv() {
     downloadCsv("usuarios-admin.csv", mapUsersToCsvRows(users));
@@ -63,20 +67,16 @@ export default function AdminDashboard({
           <Button type="button" onClick={handleDownloadUsersCsv} className="sm:w-auto">
             Baixar CSV de usuários
           </Button>
-
-          <Button
-            type="button"
-            onClick={handleDownloadCertificatesCsv}
-            className="sm:w-auto"
-          >
+          <Button type="button" onClick={handleDownloadCertificatesCsv} className="sm:w-auto">
             Baixar CSV de certificados
           </Button>
-
           <Button type="button" onClick={handleDownloadStoresCsv} className="sm:w-auto">
             Baixar CSV de lojas
           </Button>
         </div>
       </section>
+
+      <DateRangeFilter initialFilter={dateFilter} />
 
       <AdminStatsCards summary={summary} />
       <AdminFunnelCards funnel={funnel} />
