@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { courseData } from "@/lib/data/course";
+import WelcomePopup from "@/components/ui/WelcomePopup"
 
 import PageContainer from "@/components/ui/page-container";
 import Card from "@/components/ui/card";
@@ -194,7 +195,10 @@ export default async function DashboardPage() {
     certificateVideoWatched,
   });
 
-  return (
+return (
+  <>
+    <WelcomePopup />
+
     <PageContainer className="space-y-8">
       <Card className="rounded-[32px] bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(255,255,255,0.92))]">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -429,5 +433,6 @@ export default async function DashboardPage() {
         </div>
       </div>
     </PageContainer>
+    </>
   );
 }
