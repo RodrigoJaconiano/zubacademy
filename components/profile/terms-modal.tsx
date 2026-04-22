@@ -62,7 +62,11 @@ export default function TermsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
+      
+      {/* Container principal */}
+      <div className="flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl">
+        
+        {/* Header */}
         <div className="border-b border-slate-200 px-6 py-5">
           <h2 className="text-xl font-bold text-slate-900">
             Termos de utilização da plataforma
@@ -72,10 +76,11 @@ export default function TermsModal({
           </p>
         </div>
 
+        {/* Conteúdo scrollável */}
         <div
           ref={handleOpenAutoCheck}
           onScroll={checkScrollPosition}
-          className="max-h-[55vh] space-y-4 overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700"
+          className="flex-1 overflow-y-auto px-6 py-5 text-sm leading-6 text-slate-700 pb-28 space-y-4"
         >
           <p>
             Ao acessar e utilizar esta plataforma, o usuário declara estar ciente
@@ -83,7 +88,8 @@ export default function TermsModal({
             progresso e emissão de certificado vinculadas ao ambiente de
             treinamento.
             <span className="mt-2 block font-semibold text-red-600">
-              <br></br>A liberação do aplicativo da pessoa depende da disponibilidade de
+              <br />
+              A liberação do aplicativo da pessoa depende da disponibilidade de
               vagas de freelancers na loja.
             </span>
           </p>
@@ -121,7 +127,8 @@ export default function TermsModal({
           </p>
         </div>
 
-        <div className="border-t border-slate-200 px-6 py-4">
+        {/* Footer */}
+        <div className="border-t border-slate-200 px-6 py-4 bg-white">
           {!hasReachedEnd ? (
             <p className="mb-3 text-sm text-amber-700">
               Role até o final dos termos para liberar o aceite.
@@ -132,12 +139,12 @@ export default function TermsModal({
             </p>
           )}
 
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-col sm:flex-row justify-end gap-3">
             {onClose ? (
               <button
                 type="button"
                 onClick={handleClose}
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="w-full sm:w-auto inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Fechar
               </button>
@@ -147,7 +154,7 @@ export default function TermsModal({
               type="button"
               onClick={handleAcceptClick}
               disabled={!hasReachedEnd || loading}
-              className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full sm:w-auto inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Registrando aceite..." : "Li e aceito os termos"}
             </button>
