@@ -22,6 +22,10 @@ function normalizeCep(value?: string) {
   return (value ?? "").replace(/\D/g, "").slice(0, 8);
 }
 
+function normalizePhone(value?: string) {
+  return (value ?? "").replace(/\D/g, "").slice(0, 11);
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -50,7 +54,7 @@ export async function POST(request: Request) {
     }
 
     const name = body.name?.trim();
-    const phone = body.phone?.trim();
+    const phone = normalizePhone(body.phone);
     const cpf = normalizeCpf(body.cpf);
     const cep = normalizeCep(body.cep);
     const address = body.address?.trim();
@@ -60,21 +64,40 @@ export async function POST(request: Request) {
     const termsAccepted = Boolean(body.terms_accepted);
     const termsVersion = body.terms_version?.trim() || "v1";
 
-    if (
-      !name ||
-      !phone ||
-      cpf.length !== 11 ||
-      cep.length !== 8 ||
-      !city ||
-      !state ||
-      !address ||
-      !number
-    ) {
+    // validações
+    if (!name) {
+      return NextResponse.json(
+        { error: "Nome é obrigatório." },
+        { status: 400 }
+      );
+    }
+
+    if (phone.length < 10 || phone.length > 11) {
       return NextResponse.json(
         {
-          error:
-            "Preencha os campos obrigatórios. O CPF deve ter 11 dígitos e o CEP deve ter 8 dígitos.",
+          error: "Telefone inválido. Use DDD + número (ex: 11934394061).",
         },
+        { status: 400 }
+      );
+    }
+
+    if (cpf.length !== 11) {
+      return NextResponse.json(
+        { error: "CPF inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (cep.length !== 8) {
+      return NextResponse.json(
+        { error: "CEP inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (!city || !state || !address || !number) {
+      return NextResponse.json(
+        { error: "Preencha todos os campos de endereço." },
         { status: 400 }
       );
     }
@@ -85,6 +108,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const now = new Date().toISOString();
 
     const { error } = await supabase.from("profiles").upsert(
       {
@@ -99,9 +124,9 @@ export async function POST(request: Request) {
         state,
         number,
         terms_accepted: true,
-        terms_accepted_at: new Date().toISOString(),
+        terms_accepted_at: now,
         terms_version: termsVersion,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       },
       {
         onConflict: "id",
@@ -109,6 +134,8 @@ export async function POST(request: Request) {
     );
 
     if (error) {
+      console.error("Erro Supabase:", error);
+
       return NextResponse.json(
         { error: "Erro ao salvar perfil." },
         { status: 500 }

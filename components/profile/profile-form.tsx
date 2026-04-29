@@ -50,7 +50,9 @@ export default function ProfileForm({
   const router = useRouter();
 
   const [name, setName] = useState(initialName);
-  const [phone, setPhone] = useState(initialPhone);
+  const [phone, setPhone] = useState(
+    initialPhone.replace(/\D/g, "").slice(0, 11)
+  );
   const [email] = useState(initialEmail);
   const [cpf, setCpf] = useState(initialCpf);
   const [cep, setCep] = useState(initialCep);
@@ -121,8 +123,9 @@ export default function ProfileForm({
       return "Preencha o campo Nome completo corretamente.";
     }
 
-    if (!phone.trim()) {
-      return "Preencha o campo Telefone corretamente.";
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+      return "Telefone inválido. Use DDD + número (ex: 11934394061).";
     }
 
     if (!email.trim()) {
@@ -166,10 +169,7 @@ export default function ProfileForm({
 
   async function handleCepLookup(rawCep: string) {
     const cleanCep = normalizeCep(rawCep);
-
-    if (cleanCep.length !== 8) {
-      return;
-    }
+    if (cleanCep.length !== 8) return;
 
     try {
       setIsFetchingCep(true);
@@ -196,9 +196,7 @@ export default function ProfileForm({
   }
 
   async function handleCepChange(event: ChangeEvent<HTMLInputElement>) {
-    const rawValue = event.target.value;
-    const cleanCep = normalizeCep(rawValue);
-
+    const cleanCep = normalizeCep(event.target.value);
     setCep(cleanCep);
     clearErrorMessage();
 
@@ -275,7 +273,7 @@ export default function ProfileForm({
     const payload = {
       id: userId,
       name: name.trim(),
-      phone: phone.trim(),
+      phone: phone.replace(/\D/g, ""),
       cpf: normalizeCpf(cpf),
       cep: normalizeCep(cep),
       city: city.trim(),
@@ -293,7 +291,6 @@ export default function ProfileForm({
     });
 
     if (error) {
-      console.error("Erro ao salvar perfil:", error);
       setMessageVariant("error");
       setMessage("Não foi possível salvar seu perfil.");
       setIsSaving(false);
@@ -372,11 +369,15 @@ export default function ProfileForm({
                 id="phone"
                 value={phone}
                 onChange={(event) => {
-                  setPhone(event.target.value);
+                  const onlyNumbers = event.target.value.replace(/\D/g, "").slice(0, 11);
+                  setPhone(onlyNumbers);
                   clearErrorMessage();
                 }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={11}
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                placeholder="Digite seu telefone"
+                placeholder="DDD + número (ex: 11999999999)"
               />
             </div>
 
