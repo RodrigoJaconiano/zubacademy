@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 
 import FeatureCard from "@/components/landing/feature-card";
 import StatsCard from "@/components/landing/stats-card";
@@ -21,8 +20,9 @@ export default function Hero() {
           </h1>
 
           <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
-            Uma experiência completa de aprendizado com acesso seguro  <br></br> por e-mail,
-            progresso por aula, avaliação final e liberação de certificado.
+            Uma experiência completa de aprendizado com acesso seguro por
+            e-mail, escolha de loja, treinamentos por marca, progresso por curso,
+            quiz final e área de certificações.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -34,31 +34,33 @@ export default function Hero() {
             </Link>
 
             <Link
-              href="/curso"
+              href="/treinamentos"
               className="inline-flex items-center justify-center rounded-2xl border border-blue-200 bg-blue-50/70 px-6 py-3.5 text-sm font-semibold text-blue-700 transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white"
             >
-              Ver estrutura do curso
+              Ver treinamentos disponíveis
             </Link>
           </div>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
-            <StatsCard value="3 aulas" label="Conteúdo objetivo" />
+            <StatsCard value="4 aulas" label="Treinamento online" />
             <StatsCard value="70%" label="Nota mínima no quiz" />
-            <StatsCard value="100%" label="Acompanhamento de progresso" />
+            <StatsCard value="100%" label="Progresso por treinamento" />
           </div>
 
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             <FeatureCard
-              title="Aprendizado guiado"
-              description="Conteúdo estruturado para facilitar a entrada na operação."
+              title="Treinamentos por marca"
+              description="Escolha o treinamento disponível para a sua loja e acompanhe seu avanço por curso."
             />
+
             <FeatureCard
-              title="Quiz final"
-              description="Validação simples do aprendizado com resultado imediato."
+              title="Quiz por treinamento"
+              description="Cada curso possui seu próprio quiz, liberado após a conclusão de todas as aulas."
             />
+
             <FeatureCard
-              title="Certificação"
-              description="Liberação do certificado após aprovação no treinamento."
+              title="Certificações"
+              description="Após aprovação, o certificado da marca fica disponível na área de certificações."
             />
           </div>
         </div>
@@ -72,23 +74,24 @@ export default function Hero() {
               <p className="text-sm font-medium text-slate-700">
                 Plataforma de treinamento
               </p>
+
               <p className="mt-1 text-xs text-slate-500">
-                Acesso, aulas, progresso e certificação em um só lugar
+                Loja, treinamentos, quizzes e certificações em um só lugar
               </p>
             </div>
 
-          <div className="relative min-h-[520px] p-6">
-            <video
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              className="h-full w-full rounded-2xl object-cover"
-            >
-              <source src="/introzubale.mp4" type="video/mp4" />
-            </video>
-          </div>
+            <div className="relative min-h-[360px] p-4 sm:min-h-[460px] sm:p-6 lg:min-h-[520px]">
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+                className="h-full w-full rounded-2xl object-cover"
+              >
+                <source src="/introzubale.mp4" type="video/mp4" />
+              </video>
+            </div>
           </div>
         </div>
       </div>

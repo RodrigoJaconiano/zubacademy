@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import CourseClient from "@/components/course/CourseClient";
 
@@ -21,7 +21,11 @@ import type { Course } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const COURSE_SLUG = "atacadao-integracao";
+type Props = {
+  params: Promise<{
+    slug: string;
+  }>;
+};
 
 type RawProfileRow = {
   name?: string | null;
@@ -35,7 +39,9 @@ type RawProfileRow = {
   terms_accepted?: boolean | null;
 };
 
-export default async function CursoPage() {
+export default async function TreinamentoPage({ params }: Props) {
+  const { slug } = await params;
+
   const supabase = await createClient();
 
   const {
@@ -43,31 +49,13 @@ export default async function CursoPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return (
-      <PageContainer>
-        <PageState
-          eyebrow="Acesso ao curso"
-          title="Usuário não autenticado"
-          description="Faça login para acessar o conteúdo do treinamento."
-          actionHref="/login"
-          actionLabel="Ir para login"
-        />
-      </PageContainer>
-    );
+    redirect("/login");
   }
 
-  const course = await getCourseBySlug(COURSE_SLUG);
+  const course = await getCourseBySlug(slug);
 
   if (!course) {
-    return (
-      <PageContainer>
-        <PageState
-          eyebrow="Curso"
-          title="Curso não encontrado"
-          description="O curso solicitado não está disponível."
-        />
-      </PageContainer>
-    );
+    notFound();
   }
 
   const lessons = await getLessonsByCourse(course.id);
@@ -92,14 +80,17 @@ export default async function CursoPage() {
   ]);
 
   if (progressError || profileError) {
-    console.error("Erro ao carregar curso:", progressError || profileError);
+    console.error("Erro ao carregar treinamento:", {
+      progressError,
+      profileError,
+    });
 
     return (
       <PageContainer>
         <PageState
-          eyebrow="Curso"
-          title="Erro ao carregar progresso"
-          description="Não foi possível carregar seu andamento no curso agora. Tente novamente em instantes."
+          eyebrow="Treinamento"
+          title="Erro ao carregar treinamento"
+          description="Não foi possível carregar seu andamento neste treinamento agora. Tente novamente em instantes."
         />
       </PageContainer>
     );
@@ -152,3 +143,4 @@ export default async function CursoPage() {
     </PageContainer>
   );
 }
+

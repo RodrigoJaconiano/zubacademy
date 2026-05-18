@@ -3,12 +3,20 @@ export type AppNavigationItem = {
   href: string;
 };
 
-export function getAppNavigation(isAdmin = false): AppNavigationItem[] {
+type GetAppNavigationParams = {
+  isAdmin?: boolean;
+  quizHref?: string;
+};
+
+export function getAppNavigation({
+  isAdmin = false,
+  quizHref = "/treinamentos",
+}: GetAppNavigationParams = {}): AppNavigationItem[] {
   const items: AppNavigationItem[] = [
     { label: "Dashboard", href: "/dashboard" },
-    { label: "Curso", href: "/curso" },
-    { label: "Quiz", href: "/quiz" },
-    { label: "Certificado", href: "/certificado" },
+    { label: "Treinamentos", href: "/treinamentos" },
+    { label: "Quiz", href: quizHref },
+    { label: "Certificações", href: "/certificado" },
     { label: "Perfil", href: "/perfil" },
   ];
 

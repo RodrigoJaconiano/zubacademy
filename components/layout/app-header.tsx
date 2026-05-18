@@ -1,12 +1,57 @@
 import Link from "next/link";
 import Image from "next/image";
-import AppNav from "@/components/layout/app-nav";
+
+import AppNav, {
+  type HeaderCourseProgress,
+} from "@/components/layout/app-nav";
+
 import { createClient } from "@/lib/supabase/server";
 import { isZubaleAdmin } from "@/lib/utils/auth";
 
 type AppHeaderProps = {
   userName?: string | null;
 };
+
+type CourseRow = {
+  id: string;
+  slug: string;
+  title: string;
+  brand_id?: string | null;
+  brands?: {
+    id?: string | null;
+    name?: string | null;
+    slug?: string | null;
+  } | null;
+};
+
+type LessonRow = {
+  id: string;
+  course_id: string;
+};
+
+type LessonProgressRow = {
+  id: string;
+  course_id: string | null;
+  lesson_id: string | null;
+  completed: boolean | null;
+};
+
+type QuizAttemptRow = {
+  id: string;
+  course_id: string | null;
+  passed?: boolean | null;
+  completed_at?: string | null;
+};
+
+type CertificateRow = {
+  id: string;
+  course_id: string | null;
+};
+
+function calculateProgress(completed: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.round((completed / total) * 100);
+}
 
 export default async function AppHeader({ userName }: AppHeaderProps) {
   const normalizedUserName = userName?.trim();
@@ -20,6 +65,7 @@ export default async function AppHeader({ userName }: AppHeaderProps) {
   } = await supabase.auth.getUser();
 
   let appRole: string | null = null;
+  let courseProgress: HeaderCourseProgress[] = [];
 
   if (user?.id) {
     const { data: profile, error: profileError } = await supabase
@@ -33,6 +79,155 @@ export default async function AppHeader({ userName }: AppHeaderProps) {
     }
 
     appRole = profile?.app_role ?? null;
+
+    const [
+      { data: courses, error: coursesError },
+      { data: lessons, error: lessonsError },
+      { data: progressRows, error: progressError },
+      { data: quizAttempts, error: quizError },
+      { data: certificates, error: certificatesError },
+    ] = await Promise.all([
+      supabase
+        .from("courses")
+        .select(
+          `
+          id,
+          slug,
+          title,
+          brand_id,
+          brands (
+            id,
+            name,
+            slug
+          )
+        `
+        )
+        .eq("active", true)
+        .returns<CourseRow[]>(),
+
+      supabase
+        .from("lessons")
+        .select("id, course_id")
+        .eq("is_active", true)
+        .returns<LessonRow[]>(),
+
+      supabase
+        .from("lesson_progress")
+        .select("id, course_id, lesson_id, completed")
+        .eq("user_id", user.id)
+        .eq("completed", true)
+        .returns<LessonProgressRow[]>(),
+
+      supabase
+        .from("quiz_attempts")
+        .select("id, course_id, passed, completed_at")
+        .eq("user_id", user.id)
+        .returns<QuizAttemptRow[]>(),
+
+      supabase
+        .from("certificates")
+        .select("id, course_id")
+        .eq("user_id", user.id)
+        .returns<CertificateRow[]>(),
+    ]);
+
+    if (coursesError) {
+      console.error("Erro ao carregar cursos no header:", coursesError.message);
+    }
+
+    if (lessonsError) {
+      console.error("Erro ao carregar aulas no header:", lessonsError.message);
+    }
+
+    if (progressError) {
+      console.error("Erro ao carregar progresso no header:", progressError.message);
+    }
+
+    if (quizError) {
+      console.error("Erro ao carregar quizzes no header:", quizError.message);
+    }
+
+    if (certificatesError) {
+      console.error(
+        "Erro ao carregar certificados no header:",
+        certificatesError.message
+      );
+    }
+
+    const safeCourses = courses ?? [];
+    const safeLessons = lessons ?? [];
+    const safeProgressRows = progressRows ?? [];
+    const safeQuizAttempts = quizAttempts ?? [];
+    const safeCertificates = certificates ?? [];
+
+    const totalLessonsByCourseId = new Map<string, number>();
+    const completedLessonsByCourseId = new Map<string, number>();
+    const hasQuizByCourseId = new Set<string>();
+    const hasCertificateByCourseId = new Set<string>();
+
+    for (const lesson of safeLessons) {
+      totalLessonsByCourseId.set(
+        lesson.course_id,
+        (totalLessonsByCourseId.get(lesson.course_id) ?? 0) + 1
+      );
+    }
+
+    for (const progress of safeProgressRows) {
+      if (!progress.course_id) continue;
+
+      completedLessonsByCourseId.set(
+        progress.course_id,
+        (completedLessonsByCourseId.get(progress.course_id) ?? 0) + 1
+      );
+    }
+
+    for (const attempt of safeQuizAttempts) {
+      if (attempt.course_id && (attempt.completed_at || attempt.passed)) {
+        hasQuizByCourseId.add(attempt.course_id);
+      }
+    }
+
+    for (const certificate of safeCertificates) {
+      if (certificate.course_id) {
+        hasCertificateByCourseId.add(certificate.course_id);
+      }
+    }
+
+    courseProgress = safeCourses
+      .map((course) => {
+        const totalLessons = totalLessonsByCourseId.get(course.id) ?? 0;
+        const completedLessons = completedLessonsByCourseId.get(course.id) ?? 0;
+        const progressPercentage = calculateProgress(
+          completedLessons,
+          totalLessons
+        );
+
+        const hasStarted =
+          completedLessons > 0 ||
+          hasQuizByCourseId.has(course.id) ||
+          hasCertificateByCourseId.has(course.id);
+
+        return {
+          id: course.id,
+          slug: course.slug,
+          title: course.title,
+          brandName: course.brands?.name ?? null,
+          totalLessons,
+          completedLessons,
+          progressPercentage,
+          quizCompleted: hasQuizByCourseId.has(course.id),
+          certificateIssued: hasCertificateByCourseId.has(course.id),
+          hasStarted,
+        };
+      })
+      .filter((course) => course.hasStarted)
+      .sort((a, b) => {
+        if (b.progressPercentage !== a.progressPercentage) {
+          return b.progressPercentage - a.progressPercentage;
+        }
+
+        return a.title.localeCompare(b.title);
+      });
   }
 
   const admin = isZubaleAdmin({
@@ -73,7 +268,7 @@ export default async function AppHeader({ userName }: AppHeaderProps) {
         </Link>
 
         <div className="flex flex-1 items-center justify-end gap-3">
-          <AppNav isAdmin={admin} />
+          <AppNav isAdmin={admin} courseProgress={courseProgress} />
 
           {hasUserName && (
             <div className="hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-right sm:block">

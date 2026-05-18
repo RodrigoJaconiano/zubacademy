@@ -1,7 +1,7 @@
 export type Lesson = {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   videoId: string;
   order: number;
 };
@@ -9,15 +9,22 @@ export type Lesson = {
 export type Course = {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   lessons: Lesson[];
+};
+
+export type QuizOption = {
+  id: string;
+  option_text: string;
+  is_correct: boolean;
 };
 
 export type QuizQuestion = {
   id: string;
   question: string;
-  options: string[];
-  correctAnswer: string;
+  explanation: string | null;
+  question_order: number;
+  quiz_options: QuizOption[];
 };
 
 export type QuizAttempt = {

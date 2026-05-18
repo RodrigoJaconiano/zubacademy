@@ -103,7 +103,7 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Erro ao garantir profile no redirecionamento:", error);
       setCheckingSession(false);
-      router.replace("/dashboard");
+      router.replace("/treinamentos");
       return;
     }
 
@@ -131,7 +131,7 @@ export default function LoginPage() {
         applicationsError,
       });
       setCheckingSession(false);
-      router.replace("/dashboard");
+      router.replace("/treinamentos");
       return;
     }
 
@@ -169,7 +169,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.replace(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
+    router.replace(profileIncomplete || !termsAccepted ? "/perfil" : "/treinamentos");
   }
 
   async function waitForSession(maxAttempts = 12, delayMs = 250) {

@@ -64,9 +64,9 @@ export default function CourseClient({
 
   const previousCompletedCountRef = useRef(completedIds.length);
   const playerRefs = useRef<Record<string, YouTubePlayerLike | null>>({});
-  const intervalRefs = useRef<Record<string, ReturnType<typeof setInterval> | null>>(
-    {}
-  );
+  const intervalRefs = useRef<
+    Record<string, ReturnType<typeof setInterval> | null>
+  >({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -82,6 +82,7 @@ export default function CourseClient({
 
   const progressPercentage = useMemo(() => {
     if (course.lessons.length === 0) return 0;
+
     return Math.round((completedIds.length / course.lessons.length) * 100);
   }, [completedIds, course.lessons.length]);
 
@@ -91,6 +92,7 @@ export default function CourseClient({
 
   useEffect(() => {
     const previousCompletedCount = previousCompletedCountRef.current;
+
     const hasJustCompletedCourse =
       completedIds.length === course.lessons.length &&
       previousCompletedCount < course.lessons.length;
@@ -104,6 +106,7 @@ export default function CourseClient({
 
   function clearLessonInterval(lessonId: string) {
     const intervalId = intervalRefs.current[lessonId];
+
     if (intervalId) {
       clearInterval(intervalId);
       intervalRefs.current[lessonId] = null;
@@ -144,6 +147,7 @@ export default function CourseClient({
 
     intervalRefs.current[lessonId] = setInterval(() => {
       const player = playerRefs.current[lessonId];
+
       if (!player) return;
 
       try {
@@ -161,6 +165,7 @@ export default function CourseClient({
           };
 
           const maxAllowedTime = currentState.maxAllowedTime;
+
           const hasSkippedForward =
             currentTime > maxAllowedTime + SEEK_TOLERANCE_SECONDS;
 
@@ -226,6 +231,7 @@ export default function CourseClient({
     event: YouTubeEvent<number>
   ) {
     const player = event.target as unknown as YouTubePlayerLike;
+
     playerRefs.current[lessonId] = player;
 
     // 1 = playing
@@ -242,6 +248,7 @@ export default function CourseClient({
         const duration = player.getDuration() || 0;
         const lessonState = watchStateByLesson[lessonId];
         const maxAllowedTime = lessonState?.maxAllowedTime ?? 0;
+
         const watchedPercent = duration
           ? Math.round((maxAllowedTime / duration) * 100)
           : 0;
@@ -254,6 +261,7 @@ export default function CourseClient({
           markLessonVideoCompleted(lessonId, duration);
         } else {
           player.seekTo(maxAllowedTime, true);
+
           setMessageVariant("error");
           setMessage(
             "Você ainda não assistiu tempo suficiente da aula para concluí-la."
@@ -283,7 +291,10 @@ export default function CourseClient({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ lessonId }),
+        body: JSON.stringify({
+          lessonId,
+          courseId: course.id,
+        }),
       });
 
       const data = await response.json();
@@ -333,7 +344,7 @@ export default function CourseClient({
         <SectionHeading
           eyebrow="Treinamento"
           title={course.title}
-          description={course.description}
+          description={course.description ?? ""}
         />
 
         <Card className="rounded-[28px] border-blue-100 bg-blue-50/70">
@@ -342,6 +353,7 @@ export default function CourseClient({
               <p className="text-sm font-medium text-blue-700">
                 Progresso do curso
               </p>
+
               <h2 className="mt-1 text-2xl font-bold text-slate-900">
                 {progressPercentage}% concluído
               </h2>
@@ -360,6 +372,7 @@ export default function CourseClient({
                 <p className="text-sm font-semibold text-green-700">
                   Quiz final liberado
                 </p>
+
                 <p className="mt-1 text-sm text-slate-600">
                   Você já pode continuar para a etapa final do treinamento.
                 </p>
@@ -398,7 +411,7 @@ export default function CourseClient({
                       </h2>
 
                       <p className="mt-3 text-sm leading-6 text-slate-600">
-                        {lesson.description}
+                        {lesson.description ?? ""}
                       </p>
                     </div>
 
@@ -434,7 +447,12 @@ export default function CourseClient({
                           handleVideoStateChange(lesson.id, event)
                         }
                         onError={(event: YouTubeEvent<number>) => {
-                          console.log("YouTube error:", lesson.videoId, event.data);
+                          console.log(
+                            "YouTube error:",
+                            lesson.videoId,
+                            event.data
+                          );
+
                           setMessageVariant("error");
                           setMessage(
                             "Não foi possível carregar este vídeo no momento."
@@ -456,6 +474,7 @@ export default function CourseClient({
                             Assista a pelo menos {MIN_PERCENT_TO_COMPLETE}% do
                             vídeo para liberar a conclusão.
                           </p>
+
                           <p className="font-medium text-slate-700">
                             Progresso assistido: {watchedPercent}%
                           </p>
@@ -464,8 +483,8 @@ export default function CourseClient({
 
                       {!completed && watched && (
                         <p className="font-medium text-blue-700">
-                          Vídeo assistido o suficiente. Agora você já pode marcar
-                          esta aula.
+                          Vídeo assistido o suficiente. Agora você já pode
+                          marcar esta aula.
                         </p>
                       )}
 
@@ -484,15 +503,15 @@ export default function CourseClient({
                           completed
                             ? "bg-green-600 hover:bg-green-600"
                             : !canComplete
-                            ? "bg-slate-400 hover:bg-slate-400"
-                            : ""
+                              ? "bg-slate-400 hover:bg-slate-400"
+                              : ""
                         }`}
                       >
                         {completed
                           ? "Aula concluída"
                           : isLoading
-                          ? "Salvando..."
-                          : "Marcar como concluída"}
+                            ? "Salvando..."
+                            : "Marcar como concluída"}
                       </Button>
                     </div>
                   </div>
@@ -509,4 +528,3 @@ export default function CourseClient({
     </>
   );
 }
-

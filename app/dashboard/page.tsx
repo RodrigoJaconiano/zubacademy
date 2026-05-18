@@ -1,35 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { courseData } from "@/lib/data/course";
-import WelcomePopup from "@/components/ui/WelcomePopup"
+
+import WelcomePopup from "@/components/ui/WelcomePopup";
 
 import PageContainer from "@/components/ui/page-container";
 import Card from "@/components/ui/card";
-import Badge from "@/components/ui/badge";
-import ProgressBar from "@/components/ui/progress-bar";
 import SectionHeading from "@/components/ui/section-heading";
 
+import { createClient } from "@/lib/supabase/server";
+
 import {
-  getDashboardState,
   getMissingProfileFields,
   type ProfileData,
 } from "@/lib/utils/progress";
 
 export const dynamic = "force-dynamic";
-
-type QuizAttemptRow = {
-  id: string;
-  passed?: boolean | null;
-  completed_at?: string | null;
-  created_at?: string | null;
-};
-
-type CertificateRow = {
-  id: string;
-  certificate_code?: string | null;
-  issued_at?: string | null;
-};
 
 type RawProfileRow = {
   name?: string | null;
@@ -42,17 +27,44 @@ type RawProfileRow = {
   number?: string | number | null;
   terms_accepted?: boolean | null;
   store_id?: string | null;
-  certificate_video_watched?: boolean | null;
-};
-
-type LessonProgressRow = {
-  id: string;
+  primary_store_name?: string | null;
+  secondary_store_names?: string | null;
+  store_selected_at?: string | null;
 };
 
 type StoreApplicationRow = {
   id: string;
   is_primary?: boolean | null;
   store_id?: string | null;
+  stores?: {
+    id?: string | null;
+    name?: string | null;
+    brand_id?: string | null;
+    brands?: {
+      id?: string | null;
+      name?: string | null;
+      slug?: string | null;
+    } | null;
+  } | null;
+};
+
+type ActiveCourseRow = {
+  id: string;
+  brand_id: string | null;
+  slug: string;
+  title: string;
+  description: string | null;
+  active: boolean | null;
+};
+
+type SuggestedTraining = {
+  courseId: string;
+  courseSlug: string;
+  courseTitle: string;
+  courseDescription: string | null;
+  brandName: string;
+  storeName: string;
+  isPrimary: boolean;
 };
 
 export default async function DashboardPage() {
@@ -67,62 +79,51 @@ export default async function DashboardPage() {
   }
 
   const [
-    { data: progressData, error: progressError },
     { data: rawProfile, error: profileError },
-    { data: certificateData, error: certificateError },
-    { data: quizAttemptData, error: quizError },
     { data: applications, error: applicationsError },
+    { data: activeCourses, error: coursesError },
   ] = await Promise.all([
-    supabase
-      .from("lesson_progress")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("completed", true)
-      .returns<LessonProgressRow[]>(),
-
     supabase
       .from("profiles")
       .select(
-        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id, certificate_video_watched"
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id, primary_store_name, secondary_store_names, store_selected_at"
       )
       .eq("id", user.id)
       .maybeSingle<RawProfileRow>(),
 
     supabase
-      .from("certificates")
-      .select("id, certificate_code, issued_at")
-      .eq("user_id", user.id)
-      .order("issued_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<CertificateRow>(),
-
-    supabase
-      .from("quiz_attempts")
-      .select("id, passed, completed_at, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<QuizAttemptRow>(),
-
-    supabase
       .from("store_applications")
-      .select("id, is_primary, store_id")
+      .select(
+        `
+        id,
+        is_primary,
+        store_id,
+        stores (
+          id,
+          name,
+          brand_id,
+          brands (
+            id,
+            name,
+            slug
+          )
+        )
+      `
+      )
       .eq("user_id", user.id)
       .returns<StoreApplicationRow[]>(),
+
+    supabase
+      .from("courses")
+      .select("id, brand_id, slug, title, description, active")
+      .eq("active", true)
+      .returns<ActiveCourseRow[]>(),
   ]);
 
-  if (
-    progressError ||
-    profileError ||
-    certificateError ||
-    quizError ||
-    applicationsError
-  ) {
-    console.error("progressError:", progressError);
+  if (profileError || applicationsError || coursesError) {
     console.error("profileError:", profileError);
-    console.error("certificateError:", certificateError);
-    console.error("quizError:", quizError);
     console.error("applicationsError:", applicationsError);
+    console.error("coursesError:", coursesError);
 
     return (
       <PageContainer>
@@ -130,8 +131,9 @@ export default async function DashboardPage() {
           <SectionHeading
             eyebrow="Painel"
             title="Área do aluno"
-            description="Não foi possível carregar o progresso do curso."
+            description="Não foi possível carregar seus dados agora."
           />
+
           <p className="text-sm text-slate-600">
             Verifique as consultas do dashboard e tente novamente em instantes.
           </p>
@@ -141,8 +143,12 @@ export default async function DashboardPage() {
   }
 
   const profileRow = rawProfile ?? null;
+
+  const selectedApplications = applications ?? [];
+  const safeActiveCourses = activeCourses ?? [];
+
   const primaryApplication =
-    applications?.find((application) => application.is_primary) ?? null;
+    selectedApplications.find((application) => application.is_primary) ?? null;
 
   const hasSelectedStore = Boolean(
     profileRow?.store_id || primaryApplication?.store_id
@@ -176,263 +182,239 @@ export default async function DashboardPage() {
     redirect("/perfil");
   }
 
-  const completedLessons = progressData?.length ?? 0;
-  const totalLessons = courseData.lessons.length;
+  const primaryStoreName =
+    primaryApplication?.stores?.name ??
+    profileRow?.primary_store_name ??
+    "Loja principal selecionada";
 
-  const quizCompleted = Boolean(
-    quizAttemptData?.passed || quizAttemptData?.completed_at
-  );
+  const secondaryStoreNames =
+    selectedApplications
+      .filter((application) => !application.is_primary)
+      .map((application) => application.stores?.name)
+      .filter((storeName): storeName is string => Boolean(storeName)) ?? [];
 
-  const certificateIssued = Boolean(certificateData?.id);
-  const certificateVideoWatched = Boolean(profileRow?.certificate_video_watched);
+  const activeCourseByBrandId = new Map<string, ActiveCourseRow>();
 
-  const dashboardState = getDashboardState({
-    totalLessons,
-    completedLessons,
-    profileIncomplete,
-    quizCompleted,
-    certificateIssued,
-    certificateVideoWatched,
+  for (const course of safeActiveCourses) {
+    if (!course.brand_id) continue;
+    activeCourseByBrandId.set(course.brand_id, course);
+  }
+
+  const suggestedTrainingByCourseId = new Map<string, SuggestedTraining>();
+
+  const sortedApplications = [...selectedApplications].sort((a, b) => {
+    if (a.is_primary && !b.is_primary) return -1;
+    if (!a.is_primary && b.is_primary) return 1;
+    return 0;
   });
 
-return (
-  <>
-    <WelcomePopup />
+  for (const application of sortedApplications) {
+    const store = application.stores;
+    const brandId = store?.brand_id;
+    const course = brandId ? activeCourseByBrandId.get(brandId) : null;
 
-    <PageContainer className="space-y-8">
-      <Card className="rounded-[32px] bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(255,255,255,0.92))]">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <SectionHeading
-              eyebrow="Painel do aluno"
-              title="Boas-vindas!"
-              description="Acompanhe seu progresso, continue as aulas e avance para a certificação."
-            />
+    if (!store?.name || !brandId || !course) {
+      continue;
+    }
 
-            <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
-              <p className="text-sm text-slate-500">Usuário logado</p>
-              <p className="mt-1 font-semibold text-slate-900">
-                {profile?.name ?? user.email}
-              </p>
-            </div>
-          </div>
+    if (suggestedTrainingByCourseId.has(course.id)) {
+      continue;
+    }
 
-          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
-            <div className="flex min-h-[108px] flex-col justify-between rounded-2xl border border-blue-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-sm leading-5 text-slate-500">Curso</p>
-              <p className="mt-3 text-2xl font-bold leading-none text-slate-900">
-                1
-              </p>
-            </div>
+    suggestedTrainingByCourseId.set(course.id, {
+      courseId: course.id,
+      courseSlug: course.slug,
+      courseTitle: course.title,
+      courseDescription: course.description,
+      brandName: store.brands?.name ?? course.title,
+      storeName: store.name,
+      isPrimary: Boolean(application.is_primary),
+    });
+  }
 
-            <div className="flex min-h-[108px] flex-col justify-between rounded-2xl border border-blue-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-sm leading-5 text-slate-500">
-                Aulas concluídas
-              </p>
-              <p className="mt-3 text-2xl font-bold leading-none text-slate-900">
-                {completedLessons}/{totalLessons}
-              </p>
-            </div>
+  const suggestedTrainings = Array.from(suggestedTrainingByCourseId.values());
 
-            <div className="flex min-h-[108px] flex-col justify-between rounded-2xl border border-blue-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <p className="text-sm leading-5 text-slate-500">Progresso</p>
-              <p className="mt-3 text-2xl font-bold leading-none text-slate-900">
-                {dashboardState.progressPercentage}%
-              </p>
-            </div>
-          </div>
-        </div>
-      </Card>
+  return (
+    <>
+      <WelcomePopup />
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-[28px]">
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-700">
-                  Curso em andamento
-                </p>
-                <h2 className="mt-2 text-2xl font-bold text-slate-900">
-                  {courseData.title}
-                </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                  {courseData.description}
+      <PageContainer className="space-y-8">
+        <Card className="rounded-[32px] bg-[linear-gradient(135deg,rgba(239,246,255,0.95),rgba(255,255,255,0.92))]">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <SectionHeading
+                eyebrow="Painel do aluno"
+                title="Boas-vindas!"
+                description="Seu cadastro está pronto. Agora escolha um treinamento para começar."
+              />
+
+              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+                <p className="text-sm text-slate-500">Usuário logado</p>
+
+                <p className="mt-1 font-semibold text-slate-900">
+                  {profile?.name ?? user.email}
                 </p>
               </div>
-
-              <Badge
-                variant={
-                  dashboardState.progressPercentage === 100 ? "success" : "info"
-                }
-              >
-                {dashboardState.progressPercentage === 100
-                  ? "Concluído"
-                  : "Em progresso"}
-              </Badge>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm text-slate-500">Seu avanço</p>
-                  <p className="mt-1 text-xl font-semibold text-slate-900">
-                    {completedLessons} de {totalLessons} aulas concluídas
-                  </p>
-                </div>
-
-                <p className="text-sm font-semibold text-blue-700">
-                  {dashboardState.progressPercentage}%
-                </p>
-              </div>
-
-              <ProgressBar value={dashboardState.progressPercentage} />
-            </div>
-
-            {dashboardState.certificateUnlocked ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-700">
-                      Parabéns, você finalizou o curso.
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">
-                      Seu certificado já está disponível para visualização e
-                      download.
-                    </p>
-                  </div>
-
-                  <Link
-                    href="/certificado"
-                    className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md"
-                  >
-                    Ver certificado
-                  </Link>
-                </div>
-              </div>
-            ) : dashboardState.certificateIssuedButLocked ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-amber-700">
-                      Falta uma última etapa para liberar o certificado.
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">
-                      Seu certificado já foi emitido, mas você ainda precisa
-                      assistir ao vídeo obrigatório até o fim.
-                    </p>
-                  </div>
-
-                  <Link
-                    href="/certificado"
-                    className="inline-flex items-center justify-center rounded-2xl bg-amber-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-amber-700 hover:shadow-md"
-                  >
-                    Assistir vídeo e liberar
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/curso"
-                  className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
-                >
-                  {dashboardState.primaryCourseActionLabel}
-                </Link>
-
-                <Link
-                  href="/quiz"
-                  className={`inline-flex items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
-                    dashboardState.quizUnlocked && !quizCompleted
-                      ? "border border-blue-200 bg-blue-50 text-blue-700 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-white"
-                      : "border border-slate-200 bg-slate-100 text-slate-400"
-                  }`}
-                >
-                  {quizCompleted
-                    ? "Quiz concluído"
-                    : dashboardState.quizUnlocked
-                      ? "Ir para o quiz final"
-                      : "Quiz bloqueado"}
-                </Link>
-              </div>
-            )}
+            <Link
+              href="/treinamentos"
+              className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
+            >
+              Escolher treinamento
+            </Link>
           </div>
         </Card>
 
-        <div className="grid gap-6">
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <Card className="rounded-[28px]">
-            <p className="text-sm font-medium text-blue-700">Próximo passo</p>
-            <h3 className="mt-2 text-xl font-bold text-slate-900">
-              {dashboardState.nextStep.title}
-            </h3>
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-medium text-blue-700">
+                  Próximo passo
+                </p>
 
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {dashboardState.nextStep.description}
-            </p>
+                <h2 className="mt-2 text-2xl font-bold text-slate-900">
+                  Selecione um treinamento para iniciar
+                </h2>
 
-            <div className="mt-5">
-              <Badge variant={dashboardState.nextStep.badgeVariant}>
-                {dashboardState.nextStep.badgeLabel}
-              </Badge>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                  O curso só começa depois que você escolher uma marca na página
+                  de treinamentos. As sugestões são baseadas nas lojas que você
+                  selecionou durante o cadastro.
+                </p>
+              </div>
+
+              {suggestedTrainings.length > 0 ? (
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-5">
+                  <p className="text-sm font-semibold text-blue-700">
+                    Treinamentos sugeridos para você
+                  </p>
+
+                  <div className="mt-4 grid gap-3">
+                    {suggestedTrainings.map((item) => (
+                      <Link
+                        key={item.courseId}
+                        href={`/treinamentos/${item.courseSlug}`}
+                        className="rounded-2xl border border-blue-100 bg-white p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-sm"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-900">
+                              {item.courseTitle}
+                            </p>
+
+                            <p className="mt-1 text-sm text-slate-600">
+                              Loja: {item.storeName}
+                            </p>
+                          </div>
+
+                          <span className="inline-flex w-fit rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                            {item.isPrimary
+                              ? "Sugerido · Loja principal"
+                              : "Sugerido · Loja secundária"}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                  <p className="text-sm font-semibold text-amber-700">
+                    Nenhum treinamento online sugerido disponível.
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-700">
+                    As marcas das lojas selecionadas ainda não possuem
+                    treinamento online ativo na Zubacademy. Acesse a página de
+                    treinamentos para ver os cursos disponíveis ou consulte a
+                    agenda de treinamento presencial.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href="/treinamentos"
+                  className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold !text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
+                >
+                  Ver todos os treinamentos
+                </Link>
+              </div>
             </div>
           </Card>
 
-          <Card className="rounded-[28px]">
-            <p className="text-sm font-medium text-blue-700">Certificação</p>
-            <h3 className="mt-2 text-xl font-bold text-slate-900">
-              Status do certificado
-            </h3>
+          <div className="grid gap-6">
+            <Card className="rounded-[28px]">
+              <p className="text-sm font-medium text-blue-700">
+                Loja principal
+              </p>
 
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {dashboardState.certificate.description}
-            </p>
+              <h3 className="mt-2 text-xl font-bold text-slate-900">
+                {primaryStoreName}
+              </h3>
 
-            <div className="mt-5 flex items-center justify-between gap-4">
-              <Badge variant={dashboardState.certificate.badgeVariant}>
-                {dashboardState.certificate.badgeLabel}
-              </Badge>
+              {profileRow?.store_selected_at ? (
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Seleção registrada em{" "}
+                  {new Date(profileRow.store_selected_at).toLocaleString(
+                    "pt-BR"
+                  )}
+                  .
+                </p>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Esta é a loja principal vinculada ao seu cadastro.
+                </p>
+              )}
+            </Card>
 
-              <Link
-                href={dashboardState.certificate.actionHref}
-                className="text-sm font-semibold text-blue-700 transition hover:text-blue-800 hover:underline"
-              >
-                {dashboardState.certificate.actionLabel}
-              </Link>
-            </div>
-          </Card>
+            <Card className="rounded-[28px]">
+              <p className="text-sm font-medium text-blue-700">
+                Lojas secundárias
+              </p>
 
-          <Card className="rounded-[28px]">
-            <p className="text-sm font-medium text-blue-700">Acesso rápido</p>
+              {secondaryStoreNames.length > 0 ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {secondaryStoreNames.map((storeName) => (
+                    <span
+                      key={storeName}
+                      className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                    >
+                      {storeName}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  Nenhuma loja secundária foi selecionada.
+                </p>
+              )}
+            </Card>
 
-            <div className="mt-4 grid gap-3">
-              <Link
-                href="/curso"
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-              >
-                Abrir curso
-              </Link>
+            <Card className="rounded-[28px]">
+              <p className="text-sm font-medium text-blue-700">Acesso rápido</p>
 
-              <Link
-                href={dashboardState.quickQuizHref}
-                className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${
-                  dashboardState.quizUnlocked && !quizCompleted
-                    ? "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                    : "border-slate-200 bg-slate-100 text-slate-400"
-                }`}
-              >
-                {dashboardState.quickQuizLabel}
-              </Link>
+              <div className="mt-4 grid gap-3">
+                <Link
+                  href="/treinamentos"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  Escolher treinamento
+                </Link>
 
-              <Link
-                href={dashboardState.quickCertificateHref}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-              >
-                {dashboardState.quickCertificateLabel}
-              </Link>
-            </div>
-          </Card>
+                <Link
+                  href="/perfil"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  Editar perfil
+                </Link>
+              </div>
+            </Card>
+          </div>
         </div>
-      </div>
-    </PageContainer>
+      </PageContainer>
     </>
   );
 }

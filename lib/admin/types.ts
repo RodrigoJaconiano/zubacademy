@@ -25,16 +25,20 @@ export type CertificateRow = {
   certificate_code?: string | null;
   issued_at?: string | null;
   course_slug?: string | null;
+  course_id?: string | null;
+  brand_slug?: string | null;
 };
 
 export type LessonProgressRow = {
   user_id: string;
   lesson_id: string;
+  course_id?: string | null;
   completed?: boolean | null;
 };
 
 export type QuizAttemptRow = {
   user_id: string;
+  course_id?: string | null;
   score?: number | null;
   passed?: boolean | null;
   completed_at?: string | null;
@@ -100,7 +104,24 @@ export type AdminUser = {
   latestFeedbackAt: string | null;
 };
 
-export type AdminCertificate = CertificateRow;
+export type AdminCertificate = {
+  id: string;
+  user_id: string | null;
+  certificate_code: string | null;
+  issued_at: string | null;
+  course_id: string | null;
+  course_slug: string | null;
+  brand_slug: string | null;
+  courseTitle: string;
+  brandName: string;
+  brandSlug: string;
+};
+
+export type AdminCertificateByBrand = {
+  brandName: string;
+  brandSlug: string;
+  total: number;
+};
 
 export type AdminSummary = {
   totalUsers: number;
@@ -109,6 +130,7 @@ export type AdminSummary = {
   approvedUsers: number;
   certificatesIssued: number;
   uniqueCertifiedUsers: number;
+  totalFeedbacks: number;
   adminUsers: number;
   usersWithStoreSelection: number;
   averageCourseRating: number;
@@ -141,8 +163,8 @@ export type AdminStoreMetric = {
 export type AdminDashboardData = {
   users: AdminUser[];
   certificates: AdminCertificate[];
+  certificatesByBrand: AdminCertificateByBrand[];
   summary: AdminSummary;
   funnel: AdminFunnel;
   stores: AdminStoreMetric[];
 };
-

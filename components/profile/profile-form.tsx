@@ -302,7 +302,7 @@ export default function ProfileForm({
     setIsSaving(false);
 
     setTimeout(() => {
-      router.replace("/dashboard");
+      router.replace("/treinamentos");
       router.refresh();
     }, 1200);
   }

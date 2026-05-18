@@ -30,6 +30,7 @@ export async function POST(request: Request) {
           longitude: number;
         }
       | null = null;
+
     let originLabel = "Lojas disponíveis";
 
     if (isValidCoordinate(latitude) && isValidCoordinate(longitude)) {
@@ -56,7 +57,29 @@ export async function POST(request: Request) {
     const { data, error } = await adminSupabase
       .from("stores")
       .select(
-        "id, name, latitude, longitude, vacancies, applied_count, is_active, created_at, updated_at"
+        `
+        id,
+        brand_id,
+        name,
+        latitude,
+        longitude,
+        vacancies,
+        applied_count,
+        is_active,
+        created_at,
+        updated_at,
+        brands (
+          id,
+          name,
+          slug,
+          courses (
+            id,
+            slug,
+            title,
+            active
+          )
+        )
+      `
       )
       .eq("is_active", true)
       .gt("vacancies", 0)
@@ -64,6 +87,7 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error("Erro ao buscar lojas:", error);
+
       return NextResponse.json(
         {
           message: "Não foi possível carregar as lojas disponíveis.",
@@ -72,7 +96,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const stores = (data ?? []) as StoreRow[];
+    const stores = (data ?? []) as unknown as StoreRow[];
     const nearbyStores = mapStoresByDistance(stores, origin);
 
     return NextResponse.json({

@@ -11,8 +11,9 @@ export default function AdminStatsCards({ summary }: Props) {
     { label: "Perfis completos", value: summary.completedProfiles },
     { label: "Progresso médio", value: `${summary.averageProgress}%` },
     { label: "Aprovados no quiz", value: summary.approvedUsers },
-    { label: "Feedbacks", value: summary.certificatesIssued },
+    { label: "Certificados emitidos", value: summary.certificatesIssued },
     { label: "Usuários certificados", value: summary.uniqueCertifiedUsers },
+    { label: "Feedbacks recebidos", value: summary.totalFeedbacks },
     {
       label: "CSAT",
       value:
@@ -29,9 +30,7 @@ export default function AdminStatsCards({ summary }: Props) {
       {items.map((item) => (
         <Card key={item.label} className="rounded-2xl border-slate-200">
           <div className="space-y-3">
-            <p className="text-sm font-medium text-slate-500">
-              {item.label}
-            </p>
+            <p className="text-sm font-medium text-slate-500">{item.label}</p>
 
             {item.isRating ? (
               item.value ? (

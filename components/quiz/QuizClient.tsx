@@ -2,15 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import Card from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
-
-type QuizQuestion = {
-  id: string;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-};
+import type { QuizQuestion } from "@/types";
 
 type QuizResult = {
   score: number;
@@ -28,19 +23,38 @@ type InitialAttempt = {
 } | null;
 
 type QuizClientProps = {
+  courseId: string;
+  courseSlug: string;
+  certificateCodePrefix: string;
   questions?: QuizQuestion[];
   initialAttempt?: InitialAttempt;
   certificateIssued?: boolean;
 };
 
 const PASSING_PERCENTAGE = 70;
-const COURSE_SLUG = "treinamento-zubale";
 
-function generateCertificateCode(userId: string, courseSlug: string) {
-  const userFragment = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
-  const slugFragment = courseSlug.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+function normalizeCertificatePrefix(prefix: string) {
+  return prefix
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
 
-  return `${slugFragment}-${userFragment}`;
+function normalizeBrandSlug(prefix: string) {
+  return prefix
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function generateCertificateCode(prefix: string) {
+  const safePrefix = normalizeCertificatePrefix(prefix);
+  const random = crypto.randomUUID().toUpperCase();
+
+  return `${safePrefix}-${random}`;
 }
 
 function getInitialResult(
@@ -63,7 +77,14 @@ function getInitialResult(
   };
 }
 
+function getCorrectOptionText(question: QuizQuestion) {
+  return question.quiz_options.find((option) => option.is_correct)?.option_text;
+}
+
 export default function QuizClient({
+  courseId,
+  courseSlug,
+  certificateCodePrefix,
   questions = [],
   initialAttempt = null,
   certificateIssued = false,
@@ -73,6 +94,9 @@ export default function QuizClient({
 
   const safeQuestions = Array.isArray(questions) ? questions : [];
 
+  const courseHref = `/treinamentos/${courseSlug}`;
+  const certificateHref = `/certificado?course=${courseSlug}`;
+
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -81,6 +105,7 @@ export default function QuizClient({
   );
 
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
+
   const allAnswered =
     safeQuestions.length > 0 && answeredCount === safeQuestions.length;
 
@@ -88,20 +113,23 @@ export default function QuizClient({
   const alreadyPassed = Boolean(initialAttempt?.passed);
   const alreadyHasCertificate = certificateIssued;
 
-  function handleSelectAnswer(questionId: string, option: string) {
+  function handleSelectAnswer(questionId: string, optionText: string) {
     setAnswers((prev) => ({
       ...prev,
-      [questionId]: option,
+      [questionId]: optionText,
     }));
   }
 
   function calculateResult(): QuizResult {
     const correctAnswers = safeQuestions.reduce((total, question) => {
       const selectedAnswer = answers[question.id];
-      return selectedAnswer === question.correctAnswer ? total + 1 : total;
+      const correctAnswer = getCorrectOptionText(question);
+
+      return selectedAnswer === correctAnswer ? total + 1 : total;
     }, 0);
 
     const totalQuestions = safeQuestions.length;
+
     const percentage =
       totalQuestions > 0
         ? Math.round((correctAnswers / totalQuestions) * 100)
@@ -140,12 +168,15 @@ export default function QuizClient({
 
       const completedAt = new Date().toISOString();
 
-      const { error: attemptError } = await supabase.from("quiz_attempts").insert({
-        user_id: user.id,
-        score: quizResult.percentage,
-        passed: quizResult.passed,
-        completed_at: completedAt,
-      });
+      const { error: attemptError } = await supabase
+        .from("quiz_attempts")
+        .insert({
+          user_id: user.id,
+          course_id: courseId,
+          score: quizResult.percentage,
+          passed: quizResult.passed,
+          completed_at: completedAt,
+        });
 
       if (attemptError) {
         throw new Error("Não foi possível salvar sua tentativa no quiz.");
@@ -157,7 +188,7 @@ export default function QuizClient({
             .from("certificates")
             .select("id")
             .eq("user_id", user.id)
-            .eq("course_slug", COURSE_SLUG)
+            .eq("course_id", courseId)
             .maybeSingle();
 
         if (existingCertificateError) {
@@ -167,13 +198,18 @@ export default function QuizClient({
         }
 
         if (!existingCertificate) {
-          const certificateCode = generateCertificateCode(user.id, COURSE_SLUG);
+          const certificateCode =
+            generateCertificateCode(certificateCodePrefix);
+
+          const brandSlug = normalizeBrandSlug(certificateCodePrefix);
 
           const { error: certificateError } = await supabase
             .from("certificates")
             .insert({
               user_id: user.id,
-              course_slug: COURSE_SLUG,
+              course_id: courseId,
+              course_slug: courseSlug,
+              brand_slug: brandSlug,
               certificate_code: certificateCode,
               issued_at: completedAt,
             });
@@ -185,7 +221,7 @@ export default function QuizClient({
           }
         }
 
-        router.push("/certificado");
+        router.push(certificateHref);
         router.refresh();
         return;
       }
@@ -211,9 +247,11 @@ export default function QuizClient({
     return (
       <Card>
         <p className="text-sm font-medium text-amber-600">Quiz final</p>
+
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
           Nenhuma pergunta encontrada
         </h1>
+
         <p className="mt-3 text-sm leading-6 text-slate-600">
           O quiz não está disponível no momento.
         </p>
@@ -250,7 +288,7 @@ export default function QuizClient({
           <button
             type="button"
             onClick={() =>
-              router.push(alreadyHasCertificate ? "/certificado" : "/dashboard")
+              router.push(alreadyHasCertificate ? certificateHref : "/dashboard")
             }
             className="inline-flex items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700"
           >
@@ -259,10 +297,10 @@ export default function QuizClient({
 
           <button
             type="button"
-            onClick={() => router.push("/curso")}
+            onClick={() => router.push(courseHref)}
             className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            Voltar para o curso
+            Voltar para o treinamento
           </button>
         </div>
       </Card>
@@ -313,10 +351,10 @@ export default function QuizClient({
 
           <button
             type="button"
-            onClick={() => router.push("/curso")}
+            onClick={() => router.push(courseHref)}
             className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            Voltar para o curso
+            Voltar para o treinamento
           </button>
         </div>
       </Card>
@@ -364,12 +402,12 @@ export default function QuizClient({
               </h2>
 
               <div className="mt-4 space-y-3">
-                {question.options.map((option) => {
-                  const isSelected = selectedAnswer === option;
+                {question.quiz_options.map((option) => {
+                  const isSelected = selectedAnswer === option.option_text;
 
                   return (
                     <label
-                      key={option}
+                      key={option.id}
                       className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${
                         isSelected
                           ? "border-blue-600 bg-blue-50"
@@ -379,16 +417,16 @@ export default function QuizClient({
                       <input
                         type="radio"
                         name={question.id}
-                        value={option}
+                        value={option.option_text}
                         checked={isSelected}
                         onChange={() =>
-                          handleSelectAnswer(question.id, option)
+                          handleSelectAnswer(question.id, option.option_text)
                         }
                         className="mt-1 h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-600"
                       />
 
                       <span className="text-sm leading-6 text-slate-700">
-                        {option}
+                        {option.option_text}
                       </span>
                     </label>
                   );
@@ -417,11 +455,11 @@ export default function QuizClient({
 
         <button
           type="button"
-          onClick={() => router.push("/curso")}
+          onClick={() => router.push(courseHref)}
           disabled={isSubmitting}
           className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Voltar para o curso
+          Voltar para o treinamento
         </button>
       </div>
     </Card>

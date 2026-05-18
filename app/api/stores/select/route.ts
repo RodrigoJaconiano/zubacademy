@@ -77,7 +77,7 @@ function getRedirectTo(profile: ProfileRow | null) {
   const profileIncomplete = missingProfileFields.length > 0;
   const termsAccepted = Boolean(profile?.terms_accepted);
 
-  return profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard";
+  return profileIncomplete || !termsAccepted ? "/perfil" : "/treinamentos";
 }
 
 export async function POST(request: Request) {

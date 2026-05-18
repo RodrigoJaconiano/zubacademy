@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 type ProgressRequestBody = {
   lessonId?: string;
+  courseId?: string;
 };
 
 export async function POST(request: Request) {
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     }
 
     const lessonId = body.lessonId?.trim();
+    const courseId = body.courseId?.trim();
 
     if (!lessonId) {
       return NextResponse.json(
@@ -41,14 +43,22 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!courseId) {
+      return NextResponse.json(
+        { error: "courseId é obrigatório." },
+        { status: 400 }
+      );
+    }
+
     const { error } = await supabase.from("lesson_progress").upsert(
       {
         user_id: user.id,
+        course_id: courseId,
         lesson_id: lessonId,
         completed: true,
       },
       {
-        onConflict: "user_id,lesson_id",
+        onConflict: "user_id,course_id,lesson_id",
       }
     );
 

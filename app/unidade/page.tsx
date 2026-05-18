@@ -97,9 +97,9 @@ export default async function UnidadePage() {
     rawProfile?.store_id || primaryApplication?.store_id
   );
 
-  if (hasSelectedStore) {
-    redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
-  }
+if (hasSelectedStore) {
+  redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/treinamentos");
+}
 
   return (
     <PageContainer>

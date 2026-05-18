@@ -10,6 +10,18 @@ export type StoreRow = {
   is_active: boolean;
   created_at?: string | null;
   updated_at?: string | null;
+  brand_id?: string | null;
+  brands?: {
+    id?: string | null;
+    name?: string | null;
+    slug?: string | null;
+    courses?: Array<{
+      id?: string | null;
+      slug?: string | null;
+      title?: string | null;
+      active?: boolean | null;
+    }> | null;
+  } | null;
 };
 
 export type NearbyStore = {
@@ -20,6 +32,12 @@ export type NearbyStore = {
   vacancies: number;
   appliedCount: number;
   distanceKm: number | null;
+  brandId: string | null;
+  brandName: string | null;
+  brandSlug: string | null;
+  hasActiveOnlineCourse: boolean;
+  activeCourseSlug: string | null;
+  activeCourseTitle: string | null;
 };
 
 export type NearbyStoresResponse = {
@@ -32,7 +50,7 @@ export type SelectStoresResponse = {
   success: boolean;
   message: string;
   alreadySelected?: boolean;
-  redirectTo?: "/perfil" | "/dashboard";
+  redirectTo?: string;
   primaryStore?: {
     id: string;
     name: string;
@@ -43,7 +61,7 @@ export type SelectStoresResponse = {
   }>;
 };
 
-const MAX_DISTANCE_KM = 10;
+const MAX_DISTANCE_KM = 20;
 
 function getErrorMessage(data: unknown, fallback: string): string {
   if (
@@ -88,6 +106,9 @@ export function mapStoresByDistance(
           })
         : null;
 
+      const activeCourse =
+        store.brands?.courses?.find((course) => course.active) ?? null;
+
       return {
         id: store.id,
         name: store.name,
@@ -96,6 +117,12 @@ export function mapStoresByDistance(
         vacancies: store.vacancies,
         appliedCount: store.applied_count,
         distanceKm,
+        brandId: store.brand_id ?? store.brands?.id ?? null,
+        brandName: store.brands?.name ?? null,
+        brandSlug: store.brands?.slug ?? null,
+        hasActiveOnlineCourse: Boolean(activeCourse?.id),
+        activeCourseSlug: activeCourse?.slug ?? null,
+        activeCourseTitle: activeCourse?.title ?? null,
       };
     })
     .filter((store) => {
@@ -257,10 +284,7 @@ export async function selectStores(params: {
 
   if (!response.ok) {
     throw new Error(
-      getErrorMessage(
-        data,
-        "Não foi possível salvar a seleção das lojas."
-      )
+      getErrorMessage(data, "Não foi possível salvar a seleção das lojas.")
     );
   }
 

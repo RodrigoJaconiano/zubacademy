@@ -47,6 +47,7 @@ export default async function HomePage() {
         )
         .eq("id", user.id)
         .maybeSingle<RawProfileRow>(),
+
       supabase
         .from("store_applications")
         .select("id, is_primary, store_id")
@@ -85,7 +86,7 @@ export default async function HomePage() {
       redirect("/unidade");
     }
 
-    redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/dashboard");
+    redirect(profileIncomplete || !termsAccepted ? "/perfil" : "/treinamentos");
   }
 
   return (

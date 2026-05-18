@@ -28,7 +28,7 @@ function isProfileIncomplete(profile: {
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = searchParams.get("next") ?? "/treinamentos";
 
   const supabase = await createClient();
 
@@ -53,11 +53,29 @@ export async function GET(request: Request) {
     { onConflict: "id" }
   );
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, phone, cpf, cep, city, state, address, number, terms_accepted")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: applications }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "name, phone, cpf, cep, city, state, address, number, terms_accepted, store_id"
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
+
+    supabase
+      .from("store_applications")
+      .select("id, is_primary, store_id")
+      .eq("user_id", user.id),
+  ]);
+
+  const primaryApplication =
+    applications?.find((application) => application.is_primary) ?? null;
+
+  const hasSelectedStore = Boolean(profile?.store_id || primaryApplication?.store_id);
+
+  if (!hasSelectedStore) {
+    return NextResponse.redirect(`${origin}/unidade`);
+  }
 
   const profileIncomplete = isProfileIncomplete(profile);
   const termsAccepted = Boolean(profile?.terms_accepted);
